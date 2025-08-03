@@ -363,6 +363,9 @@ if st.session_state.active_tab == "📊 Overview":
         st.plotly_chart(create_gauge_chart(current, max_hist), use_container_width=True)
 
 elif st.session_state.active_tab == "🗺️ State Map":
+    if st.session_state.loc_type == "U.S. Total" and st.session_state.selected_industry != "Total Nonfarm":
+        st.info("Please note: The map below displays the overall 'Total Nonfarm' unemployment rate for each state, as industry-specific unemployment data is not available at the state level.")
+    
     all_states_df = get_all_states_latest_unemployment()
     if all_states_df is not None:
         st.plotly_chart(create_choropleth_map(all_states_df), use_container_width=True)
