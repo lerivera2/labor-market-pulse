@@ -1,5 +1,5 @@
 # Labor-Market Pulse: Professional Edition
-# Final version incorporating advanced UI, narrative flow, and a cohesive design system.
+# Final version incorporating an API-aware UI, narrative flow, and a cohesive design system.
 
 import streamlit as st
 import requests
@@ -133,9 +133,8 @@ def get_series_ids(loc_type, location, industry):
         fips = STATE_FIPS.get(location)
         if fips:
             series["Unemployment Rate"] = f"LASST{fips}0000000000003"
-            if industry == "Total Nonfarm":
-                series["Job Openings"] = f"JTS{fips}000000000JOL"
-                series["Quits Rate"] = f"JTS{fips}000000000QUR"
+            series["Job Openings"] = f"JTS{fips}000000000JOL"
+            series["Quits Rate"] = f"JTS{fips}000000000QUR"
     elif loc_type == "Metropolitan Area":
         msa_code = MSA_CODES.get(location)
         if msa_code:
@@ -276,10 +275,14 @@ with st.sidebar:
         st.session_state.base_month = selected_date
 
     st.radio("Location Type:", ["U.S. Total", "State", "Metropolitan Area"], key='loc_type', horizontal=True)
+    
+    # Context-aware filter display
     if st.session_state.loc_type == "State":
         st.selectbox("State:", sorted(STATE_FIPS.keys()), key='selected_location')
+        st.session_state.selected_industry = "Total Nonfarm" # Lock industry for states
     elif st.session_state.loc_type == "Metropolitan Area":
         st.selectbox("Metro Area:", sorted(MSA_CODES.keys()), key='selected_location')
+        st.session_state.selected_industry = "Total Nonfarm" # Lock industry for metros
     else: # US Total
         st.session_state.selected_location = "U.S. Total"
         st.selectbox("Industry:", list(INDUSTRY_CODES.keys()), key='selected_industry')
@@ -298,9 +301,11 @@ st.markdown('<h1 class="main-title">Labor Market Pulse</h1>', unsafe_allow_html=
 loc_title = st.session_state.selected_location
 if st.session_state.loc_type == "U.S. Total" and st.session_state.selected_industry != "Total Nonfarm":
     loc_title += f" ({st.session_state.selected_industry})"
+elif st.session_state.loc_type != "U.S. Total":
+     loc_title += " (Total Nonfarm)"
 st.header(f"Dashboard for {loc_title}")
 
-series_ids = get_series_ids(st.session_state.loc_type, st.session_state.selected_location, st.session_state.selected_industry if st.session_state.loc_type == "U.S. Total" else "Total Nonfarm")
+series_ids = get_series_ids(st.session_state.loc_type, st.session_state.selected_location, st.session_state.selected_industry)
 full_data_df = get_bls_data(series_ids)
 
 if full_data_df is None:
