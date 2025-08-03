@@ -205,14 +205,18 @@ def create_choropleth_map(df):
     fig.update_layout(margin=dict(t=40,b=0,l=0,r=0), title_x=0.5, geo=dict(bgcolor='rgba(0,0,0,0)'))
     return fig
 
-def create_time_series_chart(df, location, metrics):
+def create_time_series_chart(df, title, metrics, industry):
     fig = go.Figure()
     colors = {'openings': '#0D6EFD', 'unemployment': '#6C757D', 'grid': '#ddd'}
+    
+    industry_prefix = "" if industry == "Total Nonfarm" else f"{industry} "
+    
     if 'Job Openings' in metrics:
-        fig.add_trace(go.Scatter(x=df.index, y=df['Job Openings'] / 1000, name='Job Openings (K)', mode='lines', line=dict(color=colors['openings'], width=2.5)))
+        fig.add_trace(go.Scatter(x=df.index, y=df['Job Openings'] / 1000, name=f"{industry_prefix}Openings (K)", mode='lines', line=dict(color=colors['openings'], width=2.5)))
     if 'Unemployment Rate' in metrics:
-        fig.add_trace(go.Scatter(x=df.index, y=df['Unemployment Rate'], name='Unemployment Rate (%)', mode='lines', line=dict(color=colors['unemployment'], width=2.5, dash='dash'), yaxis='y2'))
-    fig.update_layout(title=dict(text=f'<b>Openings vs. Unemployment for {location}</b>', font_size=16, x=0.5),
+        fig.add_trace(go.Scatter(x=df.index, y=df['Unemployment Rate'], name=f"{industry_prefix}Unemp. Rate (%)", mode='lines', line=dict(color=colors['unemployment'], width=2.5, dash='dash'), yaxis='y2'))
+    
+    fig.update_layout(title=dict(text=f'<b>{title}</b>', font_size=16, x=0.5),
                       xaxis=dict(title_text=None, showgrid=False),
                       yaxis=dict(title=dict(text='Job Openings (K)'), showgrid=True, gridcolor=colors['grid']),
                       yaxis2=dict(title=dict(text='Unemployment (%)'), overlaying='y', side='right', showgrid=False),
@@ -379,8 +383,11 @@ elif st.session_state.active_tab == "🗺️ State Map":
 elif st.session_state.active_tab == "📈 Historical Trends":
     chart_df = display_data_df.last('24M')
     metrics_for_chart1 = [m for m in ["Job Openings", "Unemployment Rate"] if m in chart_df.columns]
+    
+    chart_title = f"Trends for {loc_title}"
+    
     if len(metrics_for_chart1) > 0:
-        st.plotly_chart(create_time_series_chart(chart_df, loc_title, metrics_for_chart1), use_container_width=True)
+        st.plotly_chart(create_time_series_chart(chart_df, chart_title, metrics_for_chart1, st.session_state.selected_industry), use_container_width=True)
     if 'Quits Rate' in chart_df.columns:
         st.plotly_chart(create_quits_rate_chart(chart_df, loc_title), use_container_width=True)
 
