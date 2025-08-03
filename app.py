@@ -26,11 +26,13 @@ st.markdown("""
     border-radius: 8px;
     margin-bottom: 1rem;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    background-color: #F0F2F6; /* Default light theme background */
+    background-color: #FFFFFF; /* Card color for light theme */
+    border: 1px solid #E0E0E0;
 }
 /* Style for cards in Streamlit's dark theme */
 [data-theme="dark"] .card {
-    background-color: #1E1E1E;
+    background-color: #262730; /* Card color for dark theme */
+    border: 1px solid #444;
 }
 .stMetric {
     background-color: transparent !important;
@@ -295,7 +297,7 @@ with tab1:
         gauge = go.Figure(go.Indicator(
             mode="gauge+number", value=current,
             gauge={'axis':{'range':[0, max_hist]}, 'bar':{'color':'#FF7F0E'}},
-            title={'text':'Current vs. Historical Max Unemployment'}
+            title={'text':'Current Rate vs. Historical High'}
         ))
         gauge.update_layout(height=250, margin=dict(l=30,r=30,t=60,b=30))
         st.plotly_chart(gauge, use_container_width=True)
