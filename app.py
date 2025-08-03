@@ -206,6 +206,7 @@ with kpi_col:
     st.subheader(f"Key Metrics for {selected_location}")
     if location_data_df is not None and len(location_data_df) > 1:
         latest_date = location_data_df.index[-1].strftime('%B %Y')
+        previous_date = location_data_df.index[-2].strftime('%B %Y')
         
         # Get latest and previous values
         latest_unemployment = location_data_df['Unemployment Rate'].iloc[-1]
@@ -221,14 +222,14 @@ with kpi_col:
             value=f"{latest_unemployment}%",
             delta=f"{delta_unemployment:.2f}%",
             delta_color="inverse", # Red for up, green for down
-            help="Measures the share of the workforce that is jobless. Lower is better."
+            help=f"Change from {previous_date}. Lower is better."
         )
         st.metric(
             label=f"Job Openings ({latest_date})", 
             value=f"{latest_openings/1_000_000:.2f}M" if latest_openings >= 1_000_000 else f"{latest_openings/1000:,.0f}K",
             delta=f"{delta_openings/1000:,.1f}K",
             delta_color="normal", # Green for up, red for down
-            help="Measures unmet labor demand. Higher indicates a tighter labor market."
+            help=f"Change from {previous_date}. Higher indicates a tighter labor market."
         )
     else:
         st.warning("Data not available for selected KPIs.")
