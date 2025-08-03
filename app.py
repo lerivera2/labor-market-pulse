@@ -67,8 +67,9 @@ def get_series_ids(location="U.S. Total"):
 @st.cache_data(ttl=3600) # Cache for 1 hour
 def get_bls_data(series_ids, location):
     if not series_ids: return None
+    # Fetch 25 months of data to ensure we have a previous period for delta calculation
     end_year = date.today().year
-    start_year = (date.today() - timedelta(days=24 * 30)).year
+    start_year = (date.today() - timedelta(days=25 * 30)).year
     headers = {'Content-type': 'application/json'}
     data = json.dumps({"seriesid": list(series_ids.values()), "startyear": str(start_year), "endyear": str(end_year), "registrationkey": BLS_API_KEY})
 
@@ -93,7 +94,8 @@ def get_bls_data(series_ids, location):
         
         if not all_series_data: return None
         combined_df = pd.concat(all_series_data, axis=1).sort_index()
-        return combined_df.last('24M').ffill()
+        # Return the last 25 months, then we will select last 24 for the chart
+        return combined_df.last('25M').ffill()
     except requests.exceptions.RequestException:
         return None
 
@@ -148,16 +150,18 @@ def create_choropleth_map(df):
     return fig
 
 def create_time_series_chart(df, location):
+    # Use last 24 months for the chart itself
+    chart_df = df.last('24M')
     fig = go.Figure()
     colors = {'openings': '#1f77b4', 'unemployment': '#ff7f0e', 'grid': '#e0e0e0'}
 
     fig.add_trace(go.Scatter(
-        x=df.index, y=df['Job Openings'] / 1000, name='Job Openings (in thousands)',
+        x=chart_df.index, y=chart_df['Job Openings'] / 1000, name='Job Openings (in thousands)',
         mode='lines+markers', line=dict(color=colors['openings'], width=2.5),
         hovertemplate='<b>Job Openings:</b> %{y:,.0f}K<extra></extra>'
     ))
     fig.add_trace(go.Scatter(
-        x=df.index, y=df['Unemployment Rate'], name='Unemployment Rate (%)',
+        x=chart_df.index, y=chart_df['Unemployment Rate'], name='Unemployment Rate (%)',
         mode='lines+markers', line=dict(color=colors['unemployment'], width=2.5, dash='dash'),
         yaxis='y2', hovertemplate='<b>Unemployment Rate:</b> %{y:.1f}%<extra></extra>'
     ))
@@ -200,12 +204,32 @@ location_data_df = get_bls_data(series_ids, selected_location)
 
 with kpi_col:
     st.subheader(f"Key Metrics for {selected_location}")
-    if location_data_df is not None and not location_data_df.empty:
+    if location_data_df is not None and len(location_data_df) > 1:
         latest_date = location_data_df.index[-1].strftime('%B %Y')
-        latest_openings = location_data_df['Job Openings'].iloc[-1]
+        
+        # Get latest and previous values
         latest_unemployment = location_data_df['Unemployment Rate'].iloc[-1]
-        st.metric(label=f"Unemployment Rate ({latest_date})", value=f"{latest_unemployment}%")
-        st.metric(label=f"Job Openings ({latest_date})", value=f"{latest_openings/1_000_000:.2f}M" if latest_openings >= 1_000_000 else f"{latest_openings/1000:,.0f}K")
+        previous_unemployment = location_data_df['Unemployment Rate'].iloc[-2]
+        delta_unemployment = latest_unemployment - previous_unemployment
+
+        latest_openings = location_data_df['Job Openings'].iloc[-1]
+        previous_openings = location_data_df['Job Openings'].iloc[-2]
+        delta_openings = latest_openings - previous_openings
+        
+        st.metric(
+            label=f"Unemployment Rate ({latest_date})", 
+            value=f"{latest_unemployment}%",
+            delta=f"{delta_unemployment:.2f}%",
+            delta_color="inverse", # Red for up, green for down
+            help="Measures the share of the workforce that is jobless. Lower is better."
+        )
+        st.metric(
+            label=f"Job Openings ({latest_date})", 
+            value=f"{latest_openings/1_000_000:.2f}M" if latest_openings >= 1_000_000 else f"{latest_openings/1000:,.0f}K",
+            delta=f"{delta_openings/1000:,.1f}K",
+            delta_color="normal", # Green for up, red for down
+            help="Measures unmet labor demand. Higher indicates a tighter labor market."
+        )
     else:
         st.warning("Data not available for selected KPIs.")
 
