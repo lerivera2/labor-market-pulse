@@ -174,7 +174,7 @@ with st.sidebar:
 
     if st.button('Refresh All Data'):
         st.cache_data.clear()
-        st.experimental_rerun()
+        st.rerun()
 
     with st.expander("Design & Accessibility Notes"):
         st.markdown("""
