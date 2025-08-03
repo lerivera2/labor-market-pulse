@@ -107,10 +107,15 @@ STATE_FIPS = {
     'West Virginia': '54', 'Wisconsin': '55', 'Wyoming': '56'
 }
 INDUSTRY_CODES = {
-    "Total Nonfarm": "000000", "Construction": "200000", "Manufacturing": "300000",
-    "Trade, Transportation, and Utilities": "400000", "Information": "510000",
-    "Financial Activities": "520000", "Professional and Business Services": "600000",
-    "Education and Health Services": "620000", "Leisure and Hospitality": "700000"
+    "Total Nonfarm": {"JOLTS": "000000", "CPS_UR": "LNS14000000"},
+    "Construction": {"JOLTS": "200000", "CPS_UR": "LNU04032231"},
+    "Manufacturing": {"JOLTS": "300000", "CPS_UR": "LNU04032232"},
+    "Trade, Transportation, and Utilities": {"JOLTS": "400000", "CPS_UR": "LNU04032235"},
+    "Information": {"JOLTS": "510000", "CPS_UR": "LNU04032240"},
+    "Financial Activities": {"JOLTS": "520000", "CPS_UR": "LNU04032241"},
+    "Professional and Business Services": {"JOLTS": "600000", "CPS_UR": "LNU04032242"},
+    "Education and Health Services": {"JOLTS": "620000", "CPS_UR": "LNU04032243"},
+    "Leisure and Hospitality": {"JOLTS": "700000", "CPS_UR": "LNU04032244"}
 }
 MSA_CODES = {
     "New York-Newark-Jersey City, NY-NJ-PA": "35620", "Los Angeles-Long Beach-Anaheim, CA": "31080",
@@ -124,10 +129,9 @@ MSA_CODES = {
 def get_series_ids(loc_type, location, industry):
     series = {}
     if loc_type == "U.S. Total":
-        ind_code = INDUSTRY_CODES[industry]
-        series["Job Openings"] = f"JTS{ind_code}000000000JOL"
+        series["Job Openings"] = f"JTS{INDUSTRY_CODES[industry]['JOLTS']}000000000JOL"
+        series["Unemployment Rate"] = INDUSTRY_CODES[industry]['CPS_UR']
         if industry == "Total Nonfarm":
-            series["Unemployment Rate"] = "LNS14000000"
             series["Quits Rate"] = "JTS000000000000000QUR"
     elif loc_type == "State":
         fips = STATE_FIPS.get(location)
@@ -375,10 +379,10 @@ elif st.session_state.active_tab == "🗺️ State Map":
 elif st.session_state.active_tab == "📈 Historical Trends":
     chart_df = display_data_df.last('24M')
     metrics_for_chart1 = [m for m in ["Job Openings", "Unemployment Rate"] if m in chart_df.columns]
-    if len(metrics_for_chart1) == 2:
-        st.plotly_chart(create_time_series_chart(chart_df, st.session_state.selected_location, metrics_for_chart1), use_container_width=True)
+    if len(metrics_for_chart1) > 0:
+        st.plotly_chart(create_time_series_chart(chart_df, loc_title, metrics_for_chart1), use_container_width=True)
     if 'Quits Rate' in chart_df.columns:
-        st.plotly_chart(create_quits_rate_chart(chart_df, st.session_state.selected_location), use_container_width=True)
+        st.plotly_chart(create_quits_rate_chart(chart_df, loc_title), use_container_width=True)
 
 elif st.session_state.active_tab == "📋 Data Export":
     st.subheader("Data Export")
