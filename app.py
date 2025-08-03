@@ -165,7 +165,7 @@ def create_dual_axis_plot(df):
             font=dict(size=20, color=colors['text'])
         ),
         xaxis=dict(
-            title_text='Date', # Use title_text for axis titles
+            title_text='Date',
             showgrid=True, 
             gridcolor=colors['grid'],
             gridwidth=1,
@@ -173,16 +173,14 @@ def create_dual_axis_plot(df):
             tickfont=dict(size=12, color=colors['text'])
         ),
         yaxis=dict(
-            title_text='<b>Job Openings (in thousands)</b>',
-            titlefont=dict(color=colors['openings'], size=14),
+            title=dict(text='<b>Job Openings (in thousands)</b>', font=dict(color=colors['openings'], size=14)),
             tickfont=dict(color=colors['openings'], size=12),
             showgrid=True,
             gridcolor=colors['grid'],
             gridwidth=1
         ),
         yaxis2=dict(
-            title_text='<b>Unemployment Rate (%)</b>',
-            titlefont=dict(color=colors['unemployment'], size=14),
+            title=dict(text='<b>Unemployment Rate (%)</b>', font=dict(color=colors['unemployment'], size=14)),
             tickfont=dict(color=colors['unemployment'], size=12),
             anchor='x',
             overlaying='y',
