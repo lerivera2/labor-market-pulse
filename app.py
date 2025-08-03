@@ -134,7 +134,6 @@ def get_bls_data(series_ids, years_to_fetch=5):
 
 @st.cache_data(ttl=3600)
 def get_all_states_latest_unemployment():
-    # Implementation unchanged from previous version
     series_ids = {f"LASST{fips}0000000000003": name for name, fips in STATE_FIPS.items()}
     end_year, start_year = date.today().year, (date.today() - timedelta(days=12*30)).year
     headers = {'Content-type': 'application/json'}
@@ -220,7 +219,13 @@ with st.sidebar:
         min_date, max_date = base_data_df.index.min(), base_data_df.index.max()
         if st.session_state.base_month is None:
             st.session_state.base_month = max_date
-        st.session_state.base_month = st.slider("Select Base Month:", min_value=min_date.to_pydatetime(), max_value=max_date.to_pydatetime(), value=st.session_state.base_month.to_pydatetime(), format="MMM YYYY")
+        
+        # Corrected line: removed .to_pydatetime() from the value argument
+        st.session_state.base_month = st.slider("Select Base Month:", 
+                                                 min_value=min_date.to_pydatetime(), 
+                                                 max_value=max_date.to_pydatetime(), 
+                                                 value=st.session_state.base_month, 
+                                                 format="MMM YYYY")
 
     st.radio("Location Type:", ["U.S. Total", "State", "Metropolitan Area"], key='loc_type', horizontal=True)
     if st.session_state.loc_type == "State":
@@ -252,7 +257,7 @@ if full_data_df is None:
     st.error("Could not retrieve data for the selected filters. Please try a different selection.")
     st.stop()
 
-display_data_df = full_data_df[full_data_df.index <= st.session_state.base_month]
+display_data_df = full_data_df[full_data_df.index <= pd.to_datetime(st.session_state.base_month)]
 
 tab1, tab2, tab3 = st.tabs(["Overview", "State Map", "Historical Trends"])
 
@@ -308,6 +313,6 @@ with tab3:
     if 'Quits Rate' in chart_df.columns:
         st.plotly_chart(create_quits_rate_chart(chart_df, st.session_state.selected_location), use_container_width=True)
     
-    if chart_df is not None:
+    if chart_df is not None and not chart_df.empty:
         csv = chart_df.to_csv().encode('utf-8')
         st.download_button("Download Trend Data as CSV", data=csv, file_name=f"labor_pulse_{st.session_state.selected_location}.csv", mime='text/csv')
