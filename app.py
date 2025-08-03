@@ -75,15 +75,23 @@ def get_bls_data(series_ids, api_key):
         # --- Process the data into a DataFrame ---
         all_series_data = []
         for series_name, series_id in series_ids.items():
-            series_data = json_data['Results']['series'][list(series_ids.values()).index(series_id)]['data']
-            df = pd.DataFrame(series_data)
-            df['date'] = pd.to_datetime(df['year'] + '-' + df['periodName'])
-            df.set_index('date', inplace=True)
-            df['value'] = pd.to_numeric(df['value'])
-            df.rename(columns={'value': series_name}, inplace=True)
-            all_series_data.append(df[[series_name]])
+            # Find the correct series data by matching the seriesID
+            for result_series in json_data['Results']['series']:
+                if result_series['seriesID'] == series_id:
+                    series_data = result_series['data']
+                    df = pd.DataFrame(series_data)
+                    df['date'] = pd.to_datetime(df['year'] + '-' + df['periodName'])
+                    df.set_index('date', inplace=True)
+                    df['value'] = pd.to_numeric(df['value'])
+                    df.rename(columns={'value': series_name}, inplace=True)
+                    all_series_data.append(df[[series_name]])
+                    break
 
         # Combine the series into a single DataFrame
+        if not all_series_data:
+            st.error("Could not parse any series from the BLS API response.")
+            return None
+            
         combined_df = pd.concat(all_series_data, axis=1)
         combined_df.sort_index(ascending=True, inplace=True)
 
@@ -103,7 +111,8 @@ def get_bls_data(series_ids, api_key):
 
 def create_dual_axis_plot(df):
     """
-    Creates a dual-axis Plotly figure for Job Openings and Unemployment Rate.
+    Creates a dual-axis Plotly figure for Job Openings and Unemployment Rate
+    with an enhanced, professional visual style.
 
     Args:
         df (pandas.DataFrame): DataFrame containing the data to plot.
@@ -113,14 +122,24 @@ def create_dual_axis_plot(df):
     """
     fig = go.Figure()
 
+    # Define a more professional color palette
+    colors = {
+        'openings': '#1f77b4',  # Muted blue
+        'unemployment': '#ff7f0e',  # Safety orange
+        'grid': '#e0e0e0',
+        'text': '#333333',
+        'background': '#f8f8f8'
+    }
+
     # Add Job Openings trace (in thousands) to the primary y-axis
     fig.add_trace(go.Scatter(
         x=df.index,
         y=df['Job Openings'] / 1000, # Display in thousands for readability
         name='Job Openings (in thousands)',
         mode='lines+markers',
-        line=dict(color='royalblue', width=3),
-        marker=dict(size=6)
+        line=dict(color=colors['openings'], width=3),
+        marker=dict(size=7, symbol='circle'),
+        hovertemplate='<b>Job Openings:</b> %{y:,.0f}K<extra></extra>'
     ))
 
     # Add Unemployment Rate trace to the secondary y-axis
@@ -129,40 +148,81 @@ def create_dual_axis_plot(df):
         y=df['Unemployment Rate'],
         name='Unemployment Rate (%)',
         mode='lines+markers',
-        line=dict(color='firebrick', width=3, dash='dash'),
-        marker=dict(symbol='cross', size=8),
-        yaxis='y2'
+        line=dict(color=colors['unemployment'], width=2.5, dash='dash'),
+        marker=dict(size=8, symbol='x-thin'),
+        yaxis='y2',
+        hovertemplate='<b>Unemployment Rate:</b> %{y:.1f}%<extra></extra>'
     ))
 
-    # --- Update layout and axes ---
+    # --- Update layout and axes for a modern, clean look ---
     fig.update_layout(
-        title_text='<b>Labor Market Pulse: Job Openings vs. Unemployment Rate</b>',
-        title_x=0.5,
-        xaxis_title='Date',
+        title=dict(
+            text='<b>Labor Market Pulse: Job Openings vs. Unemployment Rate</b>',
+            y=0.95,
+            x=0.5,
+            xanchor='center',
+            yanchor='top',
+            font=dict(size=20, color=colors['text'])
+        ),
+        xaxis=dict(
+            title_text='Date', # Use title_text for axis titles
+            showgrid=True, 
+            gridcolor=colors['grid'],
+            gridwidth=1,
+            linecolor=colors['grid'],
+            tickfont=dict(size=12, color=colors['text'])
+        ),
         yaxis=dict(
-            title='<b>Job Openings (in thousands)</b>',
-            titlefont=dict(color='royalblue'),
-            tickfont=dict(color='royalblue')
+            title_text='<b>Job Openings (in thousands)</b>',
+            titlefont=dict(color=colors['openings'], size=14),
+            tickfont=dict(color=colors['openings'], size=12),
+            showgrid=True,
+            gridcolor=colors['grid'],
+            gridwidth=1
         ),
         yaxis2=dict(
-            title='<b>Unemployment Rate (%)</b>',
-            titlefont=dict(color='firebrick'),
-            tickfont=dict(color='firebrick'),
+            title_text='<b>Unemployment Rate (%)</b>',
+            titlefont=dict(color=colors['unemployment'], size=14),
+            tickfont=dict(color=colors['unemployment'], size=12),
             anchor='x',
             overlaying='y',
-            side='right'
+            side='right',
+            showgrid=False # Avoid visual clutter from a second grid
         ),
         legend=dict(
             orientation='h',
             yanchor='bottom',
             y=1.02,
             xanchor='right',
-            x=1
+            x=1,
+            font=dict(size=12)
         ),
-        template='plotly_white',
-        height=500,
-        margin=dict(l=80, r=80, t=80, b=50)
+        template='simple_white', # A clean base template
+        plot_bgcolor=colors['background'], # Light background for the plot area
+        paper_bgcolor='white', # Background for the whole figure
+        height=550,
+        margin=dict(l=80, r=80, t=100, b=80),
+        hovermode='x unified'
     )
+    
+    # Add a vertical line to highlight the most recent data point
+    if not df.empty:
+        fig.add_vline(x=df.index[-1], line_width=2, line_dash="dot", line_color="grey")
+
+        # Add a separate annotation for the line to avoid the TypeError
+        fig.add_annotation(
+            x=df.index[-1],
+            y=1.05, # Position it slightly above the plot area
+            yref="paper", # Use 'paper' coordinates for y to place it relative to the plot area
+            text="Latest Data",
+            showarrow=False,
+            xanchor="right",
+            font=dict(
+                size=12,
+                color="grey"
+            )
+        )
+
     return fig
 
 # --- Streamlit App Layout ---
@@ -227,4 +287,3 @@ st.sidebar.info(
     - **Source:** [U.S. Bureau of Labor Statistics (BLS)](https://www.bls.gov/data/)
     """
 )
-
