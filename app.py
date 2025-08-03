@@ -39,11 +39,37 @@ html, body, [class*="st-"] {
     margin-bottom: 2rem;
 }
 
-.stTabs [data-baseweb="tab-list"] {
+/* Custom Tabs using st.radio */
+div[role="radiogroup"] {
+    display: flex;
+    justify-content: center;
     gap: 8px;
+    margin-bottom: 2rem;
 }
-.stTabs [data-baseweb="tab"] {
+div[role="radiogroup"] > label > div:first-child {
+    display: none; /* Hide the radio circle */
+}
+div[role="radiogroup"] > label {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    background-color: #F0F2F6;
+    border: 1px solid #E0E0E0;
     border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-weight: 600;
+}
+div[role="radiogroup"] > label:has(input:checked) {
+    background-color: #0D6EFD;
+    color: white;
+    border-color: #0D6EFD;
+}
+[data-theme="dark"] div[role="radiogroup"] > label {
+    background-color: #262730;
+    border-color: #444;
+}
+[data-theme="dark"] div[role="radiogroup"] > label:has(input:checked) {
+    background-color: #0D6EFD;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -221,6 +247,7 @@ def initialize_session_state():
         st.session_state.selected_location = "U.S. Total"
         st.session_state.selected_industry = "Total Nonfarm"
         st.session_state.base_month = None
+        st.session_state.active_tab = "📊 Overview"
         st.session_state.init = True
 
 def reset_to_defaults():
@@ -228,6 +255,7 @@ def reset_to_defaults():
     st.session_state.selected_location = "U.S. Total"
     st.session_state.selected_industry = "Total Nonfarm"
     st.session_state.base_month = None
+    st.session_state.active_tab = "📊 Overview"
 
 initialize_session_state()
 
@@ -260,7 +288,7 @@ with st.sidebar:
     if col1.button('Refresh All Data', use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-    col2.button('Reset Dashboard', on_click=reset_to_defaults, use_container_width=True)
+    col2.button('Reset All', on_click=reset_to_defaults, use_container_width=True)
     with st.expander("Design & Accessibility Notes"):
         st.markdown("- **Visual Integrity:** Minimize non-data ink.\n- **Color Choice:** Sequential, colorblind-safe palettes.\n- **Layout:** Z-pattern: top KPIs/map, then details.")
     st.info("Data Source: U.S. Bureau of Labor Statistics (BLS)")
@@ -281,9 +309,11 @@ if full_data_df is None:
 
 display_data_df = full_data_df[full_data_df.index <= pd.to_datetime(st.session_state.base_month)]
 
-tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "📋 Data Export"])
+# Custom Tabs using st.radio
+tab_options = ["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "📋 Data Export"]
+st.session_state.active_tab = st.radio("", tab_options, key='tabs', horizontal=True, label_visibility="collapsed")
 
-with tab1:
+if st.session_state.active_tab == "📊 Overview":
     st.subheader("Key Performance Indicators")
     if display_data_df is not None and len(display_data_df) > 1:
         latest_date_str = display_data_df.index[-1].strftime('%b %Y')
@@ -313,7 +343,6 @@ with tab1:
                 )
                 
                 st.plotly_chart(create_sparkline(display_data_df, metric), use_container_width=True, config={'displayModeBar': False})
-
     else:
         st.warning("Not enough data to display KPIs.")
 
@@ -323,14 +352,14 @@ with tab1:
         max_hist = display_data_df['Unemployment Rate'].max()
         st.plotly_chart(create_gauge_chart(current, max_hist), use_container_width=True)
 
-with tab2:
+elif st.session_state.active_tab == "🗺️ State Map":
     all_states_df = get_all_states_latest_unemployment()
     if all_states_df is not None:
         st.plotly_chart(create_choropleth_map(all_states_df), use_container_width=True)
     else:
         st.warning("Could not load map data.")
 
-with tab3:
+elif st.session_state.active_tab == "📈 Historical Trends":
     chart_df = display_data_df.last('24M')
     metrics_for_chart1 = [m for m in ["Job Openings", "Unemployment Rate"] if m in chart_df.columns]
     if len(metrics_for_chart1) == 2:
@@ -338,7 +367,7 @@ with tab3:
     if 'Quits Rate' in chart_df.columns:
         st.plotly_chart(create_quits_rate_chart(chart_df, st.session_state.selected_location), use_container_width=True)
 
-with tab4:
+elif st.session_state.active_tab == "📋 Data Export":
     st.subheader("Data Export")
     if display_data_df is not None and not display_data_df.empty:
         st.dataframe(display_data_df.tail(12).style.format("{:.2f}"))
