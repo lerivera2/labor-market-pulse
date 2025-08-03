@@ -279,10 +279,10 @@ with st.sidebar:
     # Context-aware filter display
     if st.session_state.loc_type == "State":
         st.selectbox("State:", sorted(STATE_FIPS.keys()), key='selected_location')
-        st.session_state.selected_industry = "Total Nonfarm" # Lock industry for states
+        st.session_state.selected_industry = "Total Nonfarm"
     elif st.session_state.loc_type == "Metropolitan Area":
         st.selectbox("Metro Area:", sorted(MSA_CODES.keys()), key='selected_location')
-        st.session_state.selected_industry = "Total Nonfarm" # Lock industry for metros
+        st.session_state.selected_industry = "Total Nonfarm"
     else: # US Total
         st.session_state.selected_location = "U.S. Total"
         st.selectbox("Industry:", list(INDUSTRY_CODES.keys()), key='selected_industry')
@@ -320,39 +320,44 @@ st.session_state.active_tab = st.radio("", tab_options, key='tabs', horizontal=T
 
 if st.session_state.active_tab == "📊 Overview":
     st.subheader("Key Performance Indicators")
-    if display_data_df is not None and len(display_data_df) > 1:
+    if display_data_df.empty:
+        st.warning("No data available for the selected base month. Please select an earlier date.")
+    elif len(display_data_df) < 2:
+        st.warning("Not enough historical data to calculate trends for the selected period.")
+    else:
         latest_date_str = display_data_df.index[-1].strftime('%b %Y')
         previous_date_str = display_data_df.index[-2].strftime('%B %Y')
         
         metrics_to_show = ["Unemployment Rate", "Job Openings", "Quits Rate"]
-        available_metrics = [m for m in metrics_to_show if m in display_data_df.columns]
-        cols = st.columns(len(available_metrics) or 1)
-
-        for i, metric in enumerate(available_metrics):
-            with cols[i]:
-                latest_val = display_data_df[metric].iloc[-1]
-                delta = latest_val - display_data_df[metric].iloc[-2]
-                
-                if metric == "Job Openings":
-                    value_str = f"{latest_val/1e6:.2f}M" if latest_val >= 1e6 else f"{latest_val/1e3:,.0f}K"
-                    delta_str = f"{delta/1e3:,.1f}K"
-                else:
-                    value_str = f"{latest_val:.1f}%"
-                    delta_str = f"{delta:+.2f}%"
-                
-                st.metric(
-                    label=f"{metric} ({latest_date_str})",
-                    value=value_str,
-                    delta=f"{delta_str} vs {previous_date_str}",
-                    delta_color="inverse" if metric == "Unemployment Rate" else "normal"
-                )
-                
-                st.plotly_chart(create_sparkline(display_data_df, metric), use_container_width=True, config={'displayModeBar': False})
-    else:
-        st.warning("Not enough data to display KPIs.")
+        available_metrics = [m for m in metrics_to_show if m in display_data_df.columns and not display_data_df[m].dropna().empty]
+        
+        if not available_metrics:
+            st.warning("No valid KPI data found for the selected filters and time period.")
+        else:
+            cols = st.columns(len(available_metrics))
+            for i, metric in enumerate(available_metrics):
+                with cols[i]:
+                    latest_val = display_data_df[metric].iloc[-1]
+                    delta = latest_val - display_data_df[metric].iloc[-2]
+                    
+                    if metric == "Job Openings":
+                        value_str = f"{latest_val/1e6:.2f}M" if latest_val >= 1e6 else f"{latest_val/1e3:,.0f}K"
+                        delta_str = f"{delta/1e3:,.1f}K"
+                    else:
+                        value_str = f"{latest_val:.1f}%"
+                        delta_str = f"{delta:+.2f}%"
+                    
+                    st.metric(
+                        label=f"{metric} ({latest_date_str})",
+                        value=value_str,
+                        delta=f"{delta_str} vs {previous_date_str}",
+                        delta_color="inverse" if metric == "Unemployment Rate" else "normal"
+                    )
+                    
+                    st.plotly_chart(create_sparkline(display_data_df, metric), use_container_width=True, config={'displayModeBar': False})
 
     st.markdown("---")
-    if "Unemployment Rate" in display_data_df.columns:
+    if "Unemployment Rate" in display_data_df.columns and not display_data_df.empty:
         current = display_data_df['Unemployment Rate'].iloc[-1]
         max_hist = display_data_df['Unemployment Rate'].max()
         st.plotly_chart(create_gauge_chart(current, max_hist), use_container_width=True)
