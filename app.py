@@ -46,6 +46,8 @@ html, body, [class*="st-"] {
     box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     border: 1px solid #E0E0E0;
     margin-bottom: 1rem;
+    text-align: center;
+    height: 100%;
 }
 
 [data-theme="dark"] .metric-card {
@@ -53,11 +55,40 @@ html, body, [class*="st-"] {
     border: 1px solid #444;
 }
 
+.metric-label {
+    font-size: 0.9rem;
+    color: #6c757d;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.metric-value {
+    font-size: 2.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+
+.metric-delta {
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
 .stTabs [data-baseweb="tab-list"] {
     gap: 8px;
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 8px;
+}
+.national-snapshot h5 {
+    font-weight: 600;
+    font-size: 1rem;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+.national-snapshot p {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -274,7 +305,7 @@ with st.sidebar:
     if col1.button('Refresh All Data', use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-    col2.button('Reset to Defaults', on_click=reset_to_defaults, use_container_width=True)
+    col2.button('Reset Dashboard', on_click=reset_to_defaults, use_container_width=True)
     with st.expander("Design & Accessibility Notes"):
         st.markdown("- **Visual Integrity:** Minimize non-data ink.\n- **Color Choice:** Sequential, colorblind-safe palettes.\n- **Layout:** Z-pattern: top KPIs/map, then details.")
     st.info("Data Source: U.S. Bureau of Labor Statistics (BLS)")
@@ -309,27 +340,26 @@ with tab1:
 
         for i, metric in enumerate(available_metrics):
             with cols[i]:
-                with st.container():
-                    st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-                    latest_val = display_data_df[metric].iloc[-1]
-                    delta = latest_val - display_data_df[metric].iloc[-2]
-                    
-                    if metric == "Job Openings":
-                        value_str = f"{latest_val/1e6:.2f}M" if latest_val >= 1e6 else f"{latest_val/1e3:,.0f}K"
-                        delta_str = f"{delta/1e3:,.1f}K"
-                    else:
-                        value_str = f"{latest_val:.1f}%"
-                        delta_str = f"{delta:+.2f}%"
-                    
-                    st.metric(
-                        label=f"{metric} ({latest_date_str})",
-                        value=value_str,
-                        delta=f"{delta_str} vs {previous_date_str}",
-                        delta_color="inverse" if metric == "Unemployment Rate" else "normal"
-                    )
-                    
-                    st.plotly_chart(create_sparkline(display_data_df, metric), use_container_width=True, config={'displayModeBar': False})
-                    st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+                latest_val = display_data_df[metric].iloc[-1]
+                delta = latest_val - display_data_df[metric].iloc[-2]
+                
+                if metric == "Job Openings":
+                    value_str = f"{latest_val/1e6:.2f}M" if latest_val >= 1e6 else f"{latest_val/1e3:,.0f}K"
+                    delta_str = f"{delta/1e3:,.1f}K"
+                else:
+                    value_str = f"{latest_val:.1f}%"
+                    delta_str = f"{delta:+.2f}%"
+                
+                st.metric(
+                    label=f"{metric} ({latest_date_str})",
+                    value=value_str,
+                    delta=f"{delta_str} vs {previous_date_str}",
+                    delta_color="inverse" if metric == "Unemployment Rate" else "normal"
+                )
+                
+                st.plotly_chart(create_sparkline(display_data_df, metric), use_container_width=True, config={'displayModeBar': False})
+                st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.warning("Not enough data to display KPIs.")
 
