@@ -208,7 +208,7 @@ with st.sidebar:
         - **Color Choice:** The map uses a colorblind-safe sequential palette. Charts use high-contrast colors.
         - **Layout:** A Z-pattern places high-level KPIs and the map at the top, with details below.
         """)
-    st.sidebar.info("Data Source: U.S. Bureau of Labor Statistics (BLS). Dashboard by Gemini.")
+    st.sidebar.info("Data Source: U.S. Bureau of Labor Statistics (BLS).")
 
 # --- Main Dashboard Area ---
 series_ids = get_series_ids(loc_type, selected_location, selected_industry)
