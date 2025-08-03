@@ -29,6 +29,18 @@ if not BLS_API_KEY:
 BLS_API_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
 
 # --- State and Series ID Mappings ---
+STATE_MAPPING = {
+    'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA',
+    'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'District of Columbia': 'DC', 'Florida': 'FL',
+    'Georgia': 'GA', 'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA',
+    'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD',
+    'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO',
+    'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ',
+    'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH',
+    'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC',
+    'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT',
+    'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY'
+}
 STATE_FIPS = {
     'Alabama': '01', 'Alaska': '02', 'Arizona': '04', 'Arkansas': '05', 'California': '06',
     'Colorado': '08', 'Connecticut': '09', 'Delaware': '10', 'District of Columbia': '11', 'Florida': '12',
@@ -41,31 +53,31 @@ STATE_FIPS = {
     'South Dakota': '46', 'Tennessee': '47', 'Texas': '48', 'Utah': '49', 'Vermont': '50',
     'Virginia': '51', 'Washington': '52', 'West Virginia': '54', 'Wisconsin': '55', 'Wyoming': '56'
 }
-FIPS_STATE = {v: k for k, v in STATE_FIPS.items()}
 
 def get_series_ids(location="U.S. Total"):
     if location == "U.S. Total":
         return {"Job Openings": "JTS000000000000000JOL", "Unemployment Rate": "LNS14000000"}
     else:
-        fips = STATE_FIPS[location]
-        return {"Job Openings": f"JTS{fips}000000000JOL", "Unemployment Rate": f"LASST{fips}0000000000003"}
+        fips = STATE_FIPS.get(location)
+        if fips:
+            return {"Job Openings": f"JTS{fips}000000000JOL", "Unemployment Rate": f"LASST{fips}0000000000003"}
+        return None
 
 # --- Data Fetching and Processing ---
 @st.cache_data(ttl=3600) # Cache for 1 hour
 def get_bls_data(series_ids, location):
+    if not series_ids: return None
     end_year = date.today().year
     start_year = (date.today() - timedelta(days=24 * 30)).year
     headers = {'Content-type': 'application/json'}
     data = json.dumps({"seriesid": list(series_ids.values()), "startyear": str(start_year), "endyear": str(end_year), "registrationkey": BLS_API_KEY})
 
     try:
-        response = requests.post(BLS_API_URL, data=data, headers=headers)
+        response = requests.post(BLS_API_URL, data=data, headers=headers, timeout=15)
         response.raise_for_status()
         json_data = response.json()
 
-        if json_data['status'] != 'REQUEST_SUCCEEDED':
-            st.error(f"BLS API Error for {location}: {json_data.get('message', ['Unknown error'])[0]}")
-            return None
+        if json_data['status'] != 'REQUEST_SUCCEEDED': return None
 
         all_series_data = []
         for series_name, series_id in series_ids.items():
@@ -78,57 +90,61 @@ def get_bls_data(series_ids, location):
                     df.rename(columns={'value': series_name}, inplace=True)
                     all_series_data.append(df[[series_name]])
                     break
-
+        
         if not all_series_data: return None
         combined_df = pd.concat(all_series_data, axis=1).sort_index()
         return combined_df.last('24M').ffill()
-    except Exception as e:
-        st.error(f"An error occurred while fetching data for {location}: {e}")
+    except requests.exceptions.RequestException:
         return None
 
 @st.cache_data(ttl=3600)
 def get_all_states_latest_unemployment():
     series_ids = {f"LASST{fips}0000000000003": name for name, fips in STATE_FIPS.items()}
     end_year = date.today().year
-    start_year = (date.today() - timedelta(days=6*30)).year # Get last 6 months to ensure we have data
+    start_year = (date.today() - timedelta(days=12*30)).year # Get last year of data to be safe
 
     headers = {'Content-type': 'application/json'}
-    # BLS API has a limit of 50 series per request
     series_chunks = [list(series_ids.keys())[i:i + 50] for i in range(0, len(series_ids), 50)]
-
+    
     latest_data = {}
     for chunk in series_chunks:
-        data = json.dumps({"seriesid": chunk, "startyear": str(start_year), "endyear": str(end_year), "registrationkey": BLS_API_KEY, "latest": "true"})
+        data = json.dumps({"seriesid": chunk, "startyear": str(start_year), "endyear": str(end_year), "registrationkey": BLS_API_KEY})
         try:
-            response = requests.post(BLS_API_URL, data=data, headers=headers)
+            response = requests.post(BLS_API_URL, data=data, headers=headers, timeout=15)
             response.raise_for_status()
             json_data = response.json()
             if json_data['status'] == 'REQUEST_SUCCEEDED':
                 for series in json_data['Results']['series']:
                     if series['data']:
                         state_name = series_ids[series['seriesID']]
-                        latest_data[state_name] = float(series['data'][0]['value'])
-        except Exception:
-            continue # Silently fail for a chunk if needed
-
-    return pd.DataFrame(list(latest_data.items()), columns=['State', 'Unemployment Rate'])
+                        # Create a mini-dataframe to find the actual latest value
+                        temp_df = pd.DataFrame(series['data'])
+                        temp_df['value'] = pd.to_numeric(temp_df['value'])
+                        latest_value = temp_df.iloc[-1]['value'] # Last item is the latest
+                        latest_data[state_name] = latest_value
+        except requests.exceptions.RequestException:
+            continue
+            
+    if not latest_data: return None
+    
+    df = pd.DataFrame(list(latest_data.items()), columns=['State', 'Unemployment Rate'])
+    df['State_Abbr'] = df['State'].map(STATE_MAPPING)
+    return df
 
 # --- Visualization Functions ---
 def create_choropleth_map(df):
     fig = px.choropleth(
         df,
-        locations='State',
+        locations='State_Abbr',
         locationmode="USA-states",
         color='Unemployment Rate',
         color_continuous_scale="Plasma",
         scope="usa",
+        hover_name='State',
         title="Latest Unemployment Rate by State",
         labels={'Unemployment Rate': 'Rate (%)'}
     )
-    fig.update_layout(
-        margin={"r":0,"t":40,"l":0,"b":0},
-        title_x=0.5,
-    )
+    fig.update_layout(margin={"r":0,"t":40,"l":0,"b":0}, title_x=0.5)
     return fig
 
 def create_time_series_chart(df, location):
@@ -158,38 +174,27 @@ def create_time_series_chart(df, location):
     return fig
 
 # --- Streamlit App Layout ---
-
 st.title("Labor-Market Pulse")
 st.markdown("An interactive dashboard tracking U.S. labor market health via Job Openings and Unemployment data.")
 
-# --- Sidebar ---
 with st.sidebar:
     st.header("Controls & Information")
     location_list = ["U.S. Total"] + sorted(STATE_FIPS.keys())
-
-    selected_location = st.selectbox(
-        "Select a Location:",
-        location_list,
-    )
-
+    selected_location = st.selectbox("Select a Location:", location_list)
     if st.button('Refresh All Data'):
         st.cache_data.clear()
         st.rerun()
-
     with st.expander("Design & Accessibility Notes"):
         st.markdown("""
-        - **Visual Integrity:** Charts prioritize data clarity, maximizing the data-ink ratio by minimizing gridlines and decorative elements (Tufte).
-        - **Color Choice:** The map uses a sequential `Plasma` palette, which is perceptually uniform and colorblind-safe. The line chart uses a distinct, high-contrast palette.
-        - **Layout:** The dashboard follows a Z-pattern, placing high-level KPIs and the map at the top, with the detailed time-series chart below for deeper analysis.
-        - **Accessibility:** High-contrast labels and clear typography are used throughout. Interactive elements like tooltips provide data access without relying on color alone.
+        - **Visual Integrity:** Charts prioritize data clarity by minimizing non-data elements.
+        - **Color Choice:** The map uses a colorblind-safe sequential palette. The line chart uses high-contrast colors.
+        - **Layout:** A Z-pattern places high-level KPIs and the map at the top, with details below.
+        - **Accessibility:** High-contrast labels and tooltips provide data access without relying on color alone.
         """)
     st.sidebar.info("Data Source: U.S. Bureau of Labor Statistics (BLS). Dashboard by Gemini.")
 
-# --- Main Dashboard Area ---
-# Top Row: KPIs and Map
 kpi_col, map_col = st.columns([1, 2])
 
-# Fetch data for the selected location (KPIs and Line Chart)
 series_ids = get_series_ids(selected_location)
 location_data_df = get_bls_data(series_ids, selected_location)
 
@@ -199,7 +204,6 @@ with kpi_col:
         latest_date = location_data_df.index[-1].strftime('%B %Y')
         latest_openings = location_data_df['Job Openings'].iloc[-1]
         latest_unemployment = location_data_df['Unemployment Rate'].iloc[-1]
-
         st.metric(label=f"Unemployment Rate ({latest_date})", value=f"{latest_unemployment}%")
         st.metric(label=f"Job Openings ({latest_date})", value=f"{latest_openings/1_000_000:.2f}M" if latest_openings >= 1_000_000 else f"{latest_openings/1000:,.0f}K")
     else:
@@ -213,7 +217,6 @@ with map_col:
     else:
         st.warning("Could not load map data.")
 
-# Bottom Row: Time-Series Chart
 st.markdown("---")
 if location_data_df is not None and not location_data_df.empty:
     time_series_fig = create_time_series_chart(location_data_df, selected_location)
