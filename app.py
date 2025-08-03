@@ -18,20 +18,23 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Custom CSS for Cards ---
+# --- Custom CSS for Theme-Aware Cards ---
 st.markdown("""
 <style>
 .card {
     padding: 1.2rem 1rem;
-    background-color: #FFFFFF;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     border-radius: 8px;
     margin-bottom: 1rem;
-    height: 100%;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    background-color: #F0F2F6; /* Default light theme background */
+}
+/* Style for cards in Streamlit's dark theme */
+[data-theme="dark"] .card {
+    background-color: #1E1E1E;
 }
 .stMetric {
-    background-color: transparent;
-    border: none;
+    background-color: transparent !important;
+    border: none !important;
     padding: 0 !important;
 }
 </style>
@@ -91,14 +94,14 @@ def get_series_ids(loc_type, location, industry):
         series["Job Openings"] = f"JTS{ind_code}000000000JOL"
         if industry == "Total Nonfarm":
             series["Unemployment Rate"] = "LNS14000000"
-            series["Quits Rate"] = "JTS000000000000000QUL"
+            series["Quits Rate"] = "JTS000000000000000QUR" # Corrected: QUR for Rate
     elif loc_type == "State":
         fips = STATE_FIPS.get(location)
         if fips:
             series["Unemployment Rate"] = f"LASST{fips}0000000000003"
             if industry == "Total Nonfarm":
                 series["Job Openings"] = f"JTS{fips}000000000JOL"
-                series["Quits Rate"] = f"JTS{fips}000000000QUL"
+                series["Quits Rate"] = f"JTS{fips}000000000QUR" # Corrected: QUR for Rate
     elif loc_type == "Metropolitan Area":
         msa_code = MSA_CODES.get(location)
         if msa_code:
@@ -220,7 +223,6 @@ with st.sidebar:
         if st.session_state.base_month is None:
             st.session_state.base_month = max_date
         
-        # Corrected line: removed .to_pydatetime() from the value argument
         st.session_state.base_month = st.slider("Select Base Month:", 
                                                  min_value=min_date.to_pydatetime(), 
                                                  max_value=max_date.to_pydatetime(), 
