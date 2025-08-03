@@ -1,6 +1,6 @@
-# Labor-Market Pulse: An Advanced Dashboard
+# Labor-Market Pulse: Professional Edition
 # This script fetches, processes, and visualizes U.S. and State-level labor market data,
-# adhering to professional data visualization best practices.
+# adhering to professional data visualization best practices with an advanced UI.
 
 import streamlit as st
 import requests
@@ -18,14 +18,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# --- Custom CSS for Cards ---
+st.markdown("""
+<style>
+.card {
+    padding: 1.2rem 1rem;
+    background-color: #FFFFFF;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    height: 100%;
+}
+.stMetric {
+    background-color: transparent;
+    border: none;
+    padding: 0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # --- BLS API Configuration ---
-BLS_API_KEY = os.environ.get("BLS_API_KEY")
+BLS_API_KEY = os.environ.get("BLS_API_KEY") or st.secrets.get("BLS_API_KEY")
 if not BLS_API_KEY:
-    try:
-        BLS_API_KEY = st.secrets["BLS_API_KEY"]
-    except (FileNotFoundError, KeyError):
-        st.error("A BLS_API_KEY is required. Please set it as a Streamlit secret.")
-        st.stop()
+    st.error("A BLS_API_KEY is required. Please set it as a Streamlit secret.")
+    st.stop()
 BLS_API_URL = "https://api.bls.gov/publicAPI/v2/timeseries/data/"
 
 # --- Data Mappings ---
@@ -67,6 +83,7 @@ MSA_CODES = {
     "Atlanta-Sandy Springs-Alpharetta, GA": "12060", "Boston-Cambridge-Newton, MA-NH": "14460"
 }
 
+# --- Helper Functions ---
 def get_series_ids(loc_type, location, industry):
     series = {}
     if loc_type == "U.S. Total":
@@ -88,12 +105,10 @@ def get_series_ids(loc_type, location, industry):
             series["Unemployment Rate"] = f"LAUMT{msa_code}00000000003"
     return series
 
-# --- Data Fetching ---
 @st.cache_data(ttl=3600)
-def get_bls_data(series_ids, years_to_fetch=3):
+def get_bls_data(series_ids, years_to_fetch=5):
     if not series_ids: return None
-    end_year = date.today().year
-    start_year = end_year - years_to_fetch
+    end_year, start_year = date.today().year, date.today().year - years_to_fetch
     headers = {'Content-type': 'application/json'}
     data = json.dumps({"seriesid": list(series_ids.values()), "startyear": str(start_year), "endyear": str(end_year), "registrationkey": BLS_API_KEY})
     try:
@@ -119,6 +134,7 @@ def get_bls_data(series_ids, years_to_fetch=3):
 
 @st.cache_data(ttl=3600)
 def get_all_states_latest_unemployment():
+    # Implementation unchanged from previous version
     series_ids = {f"LASST{fips}0000000000003": name for name, fips in STATE_FIPS.items()}
     end_year, start_year = date.today().year, (date.today() - timedelta(days=12*30)).year
     headers = {'Content-type': 'application/json'}
@@ -142,167 +158,156 @@ def get_all_states_latest_unemployment():
     df['State_Abbr'] = df['State'].map(STATE_MAPPING)
     return df
 
-# --- Visualization Functions ---
+# --- Visualization Components ---
 def create_choropleth_map(df):
     fig = px.choropleth(df, locations='State_Abbr', locationmode="USA-states", color='Unemployment Rate',
-                        color_continuous_scale="Plasma", scope="usa", hover_name='State',
+                        color_continuous_scale="Viridis", scope="usa", hover_name='State',
                         title="Latest Unemployment Rate by State", labels={'Unemployment Rate': 'Rate (%)'})
-    fig.update_layout(margin={"r":0,"t":40,"l":0,"b":0}, title_x=0.5)
+    fig.update_layout(margin=dict(t=40,b=0,l=0,r=0), title_x=0.5, geo=dict(bgcolor='rgba(0,0,0,0)'))
     return fig
 
 def create_time_series_chart(df, location, metrics):
     fig = go.Figure()
-    colors = {'openings': '#1f77b4', 'unemployment': '#ff7f0e', 'grid': '#e0e0e0'}
+    colors = {'openings': '#004A7F', 'unemployment': '#FF7F0E', 'grid': '#ddd'}
     if 'Job Openings' in metrics:
-        fig.add_trace(go.Scatter(x=df.index, y=df['Job Openings'] / 1000, name='Job Openings (K)', mode='lines+markers', line=dict(color=colors['openings'], width=2.5), hovertemplate='<b>Job Openings:</b> %{y:,.0f}K<extra></extra>'))
+        fig.add_trace(go.Scatter(x=df.index, y=df['Job Openings'] / 1000, name='Job Openings (K)', mode='lines', line=dict(color=colors['openings'], width=2.5)))
     if 'Unemployment Rate' in metrics:
-        fig.add_trace(go.Scatter(x=df.index, y=df['Unemployment Rate'], name='Unemployment Rate (%)', mode='lines+markers', line=dict(color=colors['unemployment'], width=2.5, dash='dash'), yaxis='y2', hovertemplate='<b>Unemployment Rate:</b> %{y:.1f}%<extra></extra>'))
-    fig.update_layout(title=dict(text=f'<b>Openings vs. Unemployment for {location}</b>', font_size=18, x=0.5),
+        fig.add_trace(go.Scatter(x=df.index, y=df['Unemployment Rate'], name='Unemployment Rate (%)', mode='lines', line=dict(color=colors['unemployment'], width=2.5, dash='dash'), yaxis='y2'))
+    fig.update_layout(title=dict(text=f'<b>Openings vs. Unemployment for {location}</b>', font_size=16, x=0.5),
                       xaxis=dict(title_text=None, showgrid=False),
-                      yaxis=dict(title=dict(text='Job Openings (in thousands)', font=dict(color=colors['openings'])), tickfont=dict(color=colors['openings']), showgrid=True, gridcolor=colors['grid']),
-                      yaxis2=dict(title=dict(text='Unemployment Rate (%)', font=dict(color=colors['unemployment'])), tickfont=dict(color=colors['unemployment']), overlaying='y', side='right', showgrid=False),
+                      yaxis=dict(title=dict(text='Job Openings (K)'), showgrid=True, gridcolor=colors['grid']),
+                      yaxis2=dict(title=dict(text='Unemployment (%)'), overlaying='y', side='right', showgrid=False),
                       legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
-                      template='simple_white', height=350, margin=dict(l=50, r=50, t=50, b=20), hovermode='x unified')
+                      template='plotly_white', height=350, margin=dict(l=50, r=50, t=50, b=20), hovermode='x unified')
     return fig
 
 def create_quits_rate_chart(df, location):
     fig = go.Figure()
-    colors = {'quits': '#2ca02c', 'grid': '#e0e0e0'}
-    fig.add_trace(go.Scatter(x=df.index, y=df['Quits Rate'], name='Quits Rate (%)', mode='lines+markers', line=dict(color=colors['quits'], width=2.5), hovertemplate='<b>Quits Rate:</b> %{y:.1f}%<extra></extra>'))
-    fig.update_layout(title=dict(text=f'<b>Quits Rate Trend for {location}</b>', font_size=18, x=0.5),
+    fig.add_trace(go.Scatter(x=df.index, y=df['Quits Rate'], name='Quits Rate (%)', mode='lines', line=dict(color='#2ca02c', width=2.5)))
+    fig.update_layout(title=dict(text=f'<b>Quits Rate Trend for {location}</b>', font_size=16, x=0.5),
                       xaxis=dict(title_text='Date', showgrid=False),
-                      yaxis=dict(title=dict(text='Quits Rate (%)', font=dict(color=colors['quits'])), tickfont=dict(color=colors['quits']), showgrid=True, gridcolor=colors['grid']),
-                      template='simple_white', height=300, margin=dict(l=50, r=50, t=50, b=50), hovermode='x unified')
+                      yaxis=dict(title=dict(text='Quits Rate (%)'), showgrid=True, gridcolor='#ddd'),
+                      template='plotly_white', height=300, margin=dict(l=50, r=50, t=50, b=50), hovermode='x unified')
     return fig
+
+def create_sparkline(df, metric):
+    spark = go.Figure(go.Scatter(x=df.index[-12:], y=df[metric].iloc[-12:], mode='lines', line=dict(width=2)))
+    spark.update_layout(margin=dict(l=0,r=0,t=0,b=0), height=50, xaxis_visible=False, yaxis_visible=False, plot_bgcolor='rgba(0,0,0,0)')
+    return spark
 
 # --- State Management ---
 def initialize_session_state():
-    if 'defaults_set' not in st.session_state:
+    if 'init' not in st.session_state:
         st.session_state.loc_type = "U.S. Total"
         st.session_state.selected_location = "U.S. Total"
         st.session_state.selected_industry = "Total Nonfarm"
-        st.session_state.base_month_str = None
-        st.session_state.defaults_set = True
+        st.session_state.base_month = None
+        st.session_state.init = True
 
 def reset_to_defaults():
     st.session_state.loc_type = "U.S. Total"
     st.session_state.selected_location = "U.S. Total"
     st.session_state.selected_industry = "Total Nonfarm"
-    st.session_state.base_month_str = None # Will be reset to latest on rerun
+    st.session_state.base_month = None
 
 initialize_session_state()
-
-# --- Streamlit App Layout ---
-st.title("Labor-Market Pulse")
-st.markdown("An interactive dashboard tracking U.S. labor market health via Job Openings, Unemployment, and Quits data.")
 
 # --- Sidebar Controls ---
 with st.sidebar:
     st.header("Controls & Information")
-    
-    # Fetch base data for populating date selector
-    base_series_ids = get_series_ids("U.S. Total", "U.S. Total", "Total Nonfarm")
-    base_data_df = get_bls_data(base_series_ids)
-    
+    base_data_df = get_bls_data(get_series_ids("U.S. Total", "U.S. Total", "Total Nonfarm"))
     if base_data_df is not None:
-        available_months = [d.strftime('%B %Y') for d in base_data_df.index]
-        if st.session_state.base_month_str is None:
-            st.session_state.base_month_str = available_months[-1]
-        
-        selected_base_month_str = st.selectbox(
-            "Select Base Month:",
-            options=available_months,
-            index=available_months.index(st.session_state.base_month_str)
-        )
-        st.session_state.base_month_str = selected_base_month_str
-    
-    loc_type = st.radio("Select Location Type:", ["U.S. Total", "State", "Metropolitan Area"], 
-                        index=["U.S. Total", "State", "Metropolitan Area"].index(st.session_state.loc_type), horizontal=True)
-    st.session_state.loc_type = loc_type
+        min_date, max_date = base_data_df.index.min(), base_data_df.index.max()
+        if st.session_state.base_month is None:
+            st.session_state.base_month = max_date
+        st.session_state.base_month = st.slider("Select Base Month:", min_value=min_date.to_pydatetime(), max_value=max_date.to_pydatetime(), value=st.session_state.base_month.to_pydatetime(), format="MMM YYYY")
 
-    if loc_type == "U.S. Total":
+    st.radio("Location Type:", ["U.S. Total", "State", "Metropolitan Area"], key='loc_type', horizontal=True)
+    if st.session_state.loc_type == "State":
+        st.selectbox("State:", sorted(STATE_FIPS.keys()), key='selected_location')
+    elif st.session_state.loc_type == "Metropolitan Area":
+        st.selectbox("Metro Area:", sorted(MSA_CODES.keys()), key='selected_location')
+    else: # US Total
         st.session_state.selected_location = "U.S. Total"
-        industry_list = list(INDUSTRY_CODES.keys())
-        st.session_state.selected_industry = st.selectbox("Select an Industry:", industry_list, index=industry_list.index(st.session_state.selected_industry))
-    elif loc_type == "State":
-        st.session_state.selected_location = st.selectbox("Select a State:", sorted(STATE_FIPS.keys()), index=sorted(STATE_FIPS.keys()).index(st.session_state.selected_location) if st.session_state.selected_location in STATE_FIPS else 0)
-        st.session_state.selected_industry = "Total Nonfarm"
-    else:
-        st.session_state.selected_location = st.selectbox("Select a Metro Area:", sorted(MSA_CODES.keys()), index=sorted(MSA_CODES.keys()).index(st.session_state.selected_location) if st.session_state.selected_location in MSA_CODES else 0)
-        st.session_state.selected_industry = "Total Nonfarm"
+        st.selectbox("Industry:", list(INDUSTRY_CODES.keys()), key='selected_industry')
 
     col1, col2 = st.columns(2)
-    with col1:
-        if st.button('Refresh All Data'):
-            st.cache_data.clear()
-            st.rerun()
-    with col2:
-        st.button('Reset to Defaults', on_click=reset_to_defaults)
-
+    col1.button('Refresh All Data', on_click=st.cache_data.clear, use_container_width=True)
+    col2.button('Reset to Defaults', on_click=reset_to_defaults, use_container_width=True)
     with st.expander("Design & Accessibility Notes"):
-        st.markdown("""
-        - **Visual Integrity:** Charts prioritize data clarity by minimizing non-data elements.
-        - **Color Choice:** The map uses a colorblind-safe sequential palette. Charts use high-contrast colors.
-        - **Layout:** A Z-pattern places high-level KPIs and the map at the top, with details below.
-        """)
-    st.sidebar.info("Data Source: U.S. Bureau of Labor Statistics (BLS).")
+        st.markdown("- **Visual Integrity:** Minimize non-data ink.\n- **Color Choice:** Sequential, colorblind-safe palettes.\n- **Layout:** Z-pattern: top KPIs/map, then details.")
+    st.info("Data Source: U.S. Bureau of Labor Statistics (BLS)")
 
 # --- Main Dashboard Area ---
-series_ids = get_series_ids(st.session_state.loc_type, st.session_state.selected_location, st.session_state.selected_industry)
+st.title("Labor-Market Pulse")
+loc_title = st.session_state.selected_location
+if st.session_state.loc_type == "U.S. Total" and st.session_state.selected_industry != "Total Nonfarm":
+    loc_title += f" ({st.session_state.selected_industry})"
+st.header(f"Dashboard for {loc_title}")
+
+series_ids = get_series_ids(st.session_state.loc_type, st.session_state.selected_location, st.session_state.selected_industry if st.session_state.loc_type == "U.S. Total" else "Total Nonfarm")
 full_data_df = get_bls_data(series_ids)
 
-# Filter data based on selected base month
-if full_data_df is not None and st.session_state.base_month_str:
-    base_month_ts = pd.to_datetime(st.session_state.base_month_str)
-    display_data_df = full_data_df[full_data_df.index <= base_month_ts]
-else:
-    display_data_df = full_data_df
+if full_data_df is None:
+    st.error("Could not retrieve data for the selected filters. Please try a different selection.")
+    st.stop()
 
-kpi_col, map_col = st.columns([1, 2])
+display_data_df = full_data_df[full_data_df.index <= st.session_state.base_month]
 
-with kpi_col:
-    st.subheader(f"Key Metrics for {st.session_state.selected_location}")
-    if st.session_state.selected_industry != "Total Nonfarm":
-        st.caption(f"Industry: {st.session_state.selected_industry}")
+tab1, tab2, tab3 = st.tabs(["Overview", "State Map", "Historical Trends"])
 
+with tab1:
+    st.subheader("Key Performance Indicators")
+    cols = st.columns(3)
+    metrics_to_show = ["Unemployment Rate", "Job Openings", "Quits Rate"]
     if display_data_df is not None and len(display_data_df) > 1:
-        latest_date = display_data_df.index[-1].strftime('%B %Y')
-        previous_date = display_data_df.index[-2].strftime('%B %Y')
-
-        for metric in ["Unemployment Rate", "Job Openings", "Quits Rate"]:
+        latest_date_str = display_data_df.index[-1].strftime('%b %Y')
+        previous_date_str = display_data_df.index[-2].strftime('%B %Y')
+        for i, metric in enumerate(metrics_to_show):
             if metric in display_data_df.columns:
-                latest_val = display_data_df[metric].iloc[-1]
-                prev_val = display_data_df[metric].iloc[-2]
-                delta = latest_val - prev_val
-                
-                if metric == "Unemployment Rate":
-                    st.metric(label=f"{metric} ({latest_date})", value=f"{latest_val}%", delta=f"{delta:.2f}%", delta_color="inverse", help=f"Change from {previous_date}. Lower is better.")
-                elif metric == "Job Openings":
-                    st.metric(label=f"{metric} ({latest_date})", value=f"{latest_val/1_000_000:.2f}M" if latest_val >= 1_000_000 else f"{latest_val/1000:,.0f}K", delta=f"{delta/1000:,.1f}K", delta_color="normal", help=f"Change from {previous_date}. Higher indicates a tighter labor market.")
-                elif metric == "Quits Rate":
-                    st.metric(label=f"{metric} ({latest_date})", value=f"{latest_val}%", delta=f"{delta:.2f}%", delta_color="normal", help=f"Change from {previous_date}. Higher indicates strong worker confidence.")
+                with cols[i]:
+                    st.markdown('<div class="card">', unsafe_allow_html=True)
+                    latest_val = display_data_df[metric].iloc[-1]
+                    delta = latest_val - display_data_df[metric].iloc[-2]
+                    help_text = f"Change from {previous_date_str}. "
+                    if metric == "Unemployment Rate":
+                        st.metric(label=f"{metric} ({latest_date_str})", value=f"{latest_val}%", delta=f"{delta:.2f}%", delta_color="inverse", help=help_text + "Lower is better.")
+                    elif metric == "Job Openings":
+                        st.metric(label=f"{metric} ({latest_date_str})", value=f"{latest_val/1e6:.2f}M" if latest_val >= 1e6 else f"{latest_val/1e3:,.0f}K", delta=f"{delta/1e3:,.1f}K", delta_color="normal", help=help_text + "Higher indicates a tighter labor market.")
+                    elif metric == "Quits Rate":
+                        st.metric(label=f"{metric} ({latest_date_str})", value=f"{latest_val}%", delta=f"{delta:.2f}%", delta_color="normal", help=help_text + "Higher indicates strong worker confidence.")
+                    st.plotly_chart(create_sparkline(display_data_df, metric), use_container_width=True, config={'displayModeBar': False})
+                    st.markdown('</div>', unsafe_allow_html=True)
     else:
-        st.warning("Data not available for the selected filters.")
+        st.warning("Not enough data to display KPIs.")
 
-with map_col:
+    st.markdown("---")
+    if "Unemployment Rate" in display_data_df.columns:
+        current = display_data_df['Unemployment Rate'].iloc[-1]
+        max_hist = display_data_df['Unemployment Rate'].max()
+        gauge = go.Figure(go.Indicator(
+            mode="gauge+number", value=current,
+            gauge={'axis':{'range':[0, max_hist]}, 'bar':{'color':'#FF7F0E'}},
+            title={'text':'Current vs. Historical Max Unemployment'}
+        ))
+        gauge.update_layout(height=250, margin=dict(l=30,r=30,t=60,b=30))
+        st.plotly_chart(gauge, use_container_width=True)
+
+with tab2:
     all_states_df = get_all_states_latest_unemployment()
-    if all_states_df is not None and not all_states_df.empty:
+    if all_states_df is not None:
         st.plotly_chart(create_choropleth_map(all_states_df), use_container_width=True)
     else:
         st.warning("Could not load map data.")
 
-st.markdown("---")
-
-if display_data_df is not None:
+with tab3:
     chart_df = display_data_df.last('24M')
     metrics_for_chart1 = [m for m in ["Job Openings", "Unemployment Rate"] if m in chart_df.columns]
     if len(metrics_for_chart1) == 2:
         st.plotly_chart(create_time_series_chart(chart_df, st.session_state.selected_location, metrics_for_chart1), use_container_width=True)
-    
     if 'Quits Rate' in chart_df.columns:
         st.plotly_chart(create_quits_rate_chart(chart_df, st.session_state.selected_location), use_container_width=True)
     
-    if not metrics_for_chart1 and 'Quits Rate' not in chart_df.columns:
-         st.error(f"Could not display historical data for {st.session_state.selected_location}. The selected data series may be unavailable.")
-else:
-    st.error(f"Could not retrieve any historical data for {st.session_state.selected_location}.")
+    if chart_df is not None:
+        csv = chart_df.to_csv().encode('utf-8')
+        st.download_button("Download Trend Data as CSV", data=csv, file_name=f"labor_pulse_{st.session_state.selected_location}.csv", mime='text/csv')
