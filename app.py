@@ -90,10 +90,10 @@ def get_series_ids(loc_type, location, industry):
 
 # --- Data Fetching ---
 @st.cache_data(ttl=3600)
-def get_bls_data(series_ids, location):
+def get_bls_data(series_ids, years_to_fetch=3):
     if not series_ids: return None
     end_year = date.today().year
-    start_year = (date.today() - timedelta(days=25 * 30)).year
+    start_year = end_year - years_to_fetch
     headers = {'Content-type': 'application/json'}
     data = json.dumps({"seriesid": list(series_ids.values()), "startyear": str(start_year), "endyear": str(end_year), "registrationkey": BLS_API_KEY})
     try:
@@ -113,7 +113,7 @@ def get_bls_data(series_ids, location):
                     all_series_data.append(df[[series_name]])
                     break
         if not all_series_data: return None
-        return pd.concat(all_series_data, axis=1).sort_index().last('25M').ffill()
+        return pd.concat(all_series_data, axis=1).sort_index().ffill()
     except requests.exceptions.RequestException:
         return None
 
@@ -151,15 +151,12 @@ def create_choropleth_map(df):
     return fig
 
 def create_time_series_chart(df, location, metrics):
-    chart_df = df.last('24M')
     fig = go.Figure()
-    colors = {'openings': '#1f77b4', 'unemployment': '#ff7f0e', 'quits': '#2ca02c', 'grid': '#e0e0e0'}
-    
+    colors = {'openings': '#1f77b4', 'unemployment': '#ff7f0e', 'grid': '#e0e0e0'}
     if 'Job Openings' in metrics:
-        fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['Job Openings'] / 1000, name='Job Openings (K)', mode='lines+markers', line=dict(color=colors['openings'], width=2.5), hovertemplate='<b>Job Openings:</b> %{y:,.0f}K<extra></extra>'))
+        fig.add_trace(go.Scatter(x=df.index, y=df['Job Openings'] / 1000, name='Job Openings (K)', mode='lines+markers', line=dict(color=colors['openings'], width=2.5), hovertemplate='<b>Job Openings:</b> %{y:,.0f}K<extra></extra>'))
     if 'Unemployment Rate' in metrics:
-        fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['Unemployment Rate'], name='Unemployment Rate (%)', mode='lines+markers', line=dict(color=colors['unemployment'], width=2.5, dash='dash'), yaxis='y2', hovertemplate='<b>Unemployment Rate:</b> %{y:.1f}%<extra></extra>'))
-
+        fig.add_trace(go.Scatter(x=df.index, y=df['Unemployment Rate'], name='Unemployment Rate (%)', mode='lines+markers', line=dict(color=colors['unemployment'], width=2.5, dash='dash'), yaxis='y2', hovertemplate='<b>Unemployment Rate:</b> %{y:.1f}%<extra></extra>'))
     fig.update_layout(title=dict(text=f'<b>Openings vs. Unemployment for {location}</b>', font_size=18, x=0.5),
                       xaxis=dict(title_text=None, showgrid=False),
                       yaxis=dict(title=dict(text='Job Openings (in thousands)', font=dict(color=colors['openings'])), tickfont=dict(color=colors['openings']), showgrid=True, gridcolor=colors['grid']),
@@ -169,15 +166,31 @@ def create_time_series_chart(df, location, metrics):
     return fig
 
 def create_quits_rate_chart(df, location):
-    chart_df = df.last('24M')
     fig = go.Figure()
     colors = {'quits': '#2ca02c', 'grid': '#e0e0e0'}
-    fig.add_trace(go.Scatter(x=chart_df.index, y=chart_df['Quits Rate'], name='Quits Rate (%)', mode='lines+markers', line=dict(color=colors['quits'], width=2.5), hovertemplate='<b>Quits Rate:</b> %{y:.1f}%<extra></extra>'))
+    fig.add_trace(go.Scatter(x=df.index, y=df['Quits Rate'], name='Quits Rate (%)', mode='lines+markers', line=dict(color=colors['quits'], width=2.5), hovertemplate='<b>Quits Rate:</b> %{y:.1f}%<extra></extra>'))
     fig.update_layout(title=dict(text=f'<b>Quits Rate Trend for {location}</b>', font_size=18, x=0.5),
                       xaxis=dict(title_text='Date', showgrid=False),
                       yaxis=dict(title=dict(text='Quits Rate (%)', font=dict(color=colors['quits'])), tickfont=dict(color=colors['quits']), showgrid=True, gridcolor=colors['grid']),
                       template='simple_white', height=300, margin=dict(l=50, r=50, t=50, b=50), hovermode='x unified')
     return fig
+
+# --- State Management ---
+def initialize_session_state():
+    if 'defaults_set' not in st.session_state:
+        st.session_state.loc_type = "U.S. Total"
+        st.session_state.selected_location = "U.S. Total"
+        st.session_state.selected_industry = "Total Nonfarm"
+        st.session_state.base_month_str = None
+        st.session_state.defaults_set = True
+
+def reset_to_defaults():
+    st.session_state.loc_type = "U.S. Total"
+    st.session_state.selected_location = "U.S. Total"
+    st.session_state.selected_industry = "Total Nonfarm"
+    st.session_state.base_month_str = None # Will be reset to latest on rerun
+
+initialize_session_state()
 
 # --- Streamlit App Layout ---
 st.title("Labor-Market Pulse")
@@ -186,22 +199,46 @@ st.markdown("An interactive dashboard tracking U.S. labor market health via Job 
 # --- Sidebar Controls ---
 with st.sidebar:
     st.header("Controls & Information")
-    loc_type = st.radio("Select Location Type:", ["U.S. Total", "State", "Metropolitan Area"], horizontal=True)
     
-    if loc_type == "U.S. Total":
-        selected_location = "U.S. Total"
-        industry_list = list(INDUSTRY_CODES.keys())
-        selected_industry = st.selectbox("Select an Industry (for Job Openings):", industry_list)
-    elif loc_type == "State":
-        selected_location = st.selectbox("Select a State:", sorted(STATE_FIPS.keys()))
-        selected_industry = "Total Nonfarm" # Industry data not available at state level via this API structure
-    else: # Metropolitan Area
-        selected_location = st.selectbox("Select a Metro Area:", sorted(MSA_CODES.keys()))
-        selected_industry = "Total Nonfarm"
+    # Fetch base data for populating date selector
+    base_series_ids = get_series_ids("U.S. Total", "U.S. Total", "Total Nonfarm")
+    base_data_df = get_bls_data(base_series_ids)
+    
+    if base_data_df is not None:
+        available_months = [d.strftime('%B %Y') for d in base_data_df.index]
+        if st.session_state.base_month_str is None:
+            st.session_state.base_month_str = available_months[-1]
+        
+        selected_base_month_str = st.selectbox(
+            "Select Base Month:",
+            options=available_months,
+            index=available_months.index(st.session_state.base_month_str)
+        )
+        st.session_state.base_month_str = selected_base_month_str
+    
+    loc_type = st.radio("Select Location Type:", ["U.S. Total", "State", "Metropolitan Area"], 
+                        index=["U.S. Total", "State", "Metropolitan Area"].index(st.session_state.loc_type), horizontal=True)
+    st.session_state.loc_type = loc_type
 
-    if st.button('Refresh All Data'):
-        st.cache_data.clear()
-        st.rerun()
+    if loc_type == "U.S. Total":
+        st.session_state.selected_location = "U.S. Total"
+        industry_list = list(INDUSTRY_CODES.keys())
+        st.session_state.selected_industry = st.selectbox("Select an Industry:", industry_list, index=industry_list.index(st.session_state.selected_industry))
+    elif loc_type == "State":
+        st.session_state.selected_location = st.selectbox("Select a State:", sorted(STATE_FIPS.keys()), index=sorted(STATE_FIPS.keys()).index(st.session_state.selected_location) if st.session_state.selected_location in STATE_FIPS else 0)
+        st.session_state.selected_industry = "Total Nonfarm"
+    else:
+        st.session_state.selected_location = st.selectbox("Select a Metro Area:", sorted(MSA_CODES.keys()), index=sorted(MSA_CODES.keys()).index(st.session_state.selected_location) if st.session_state.selected_location in MSA_CODES else 0)
+        st.session_state.selected_industry = "Total Nonfarm"
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button('Refresh All Data'):
+            st.cache_data.clear()
+            st.rerun()
+    with col2:
+        st.button('Reset to Defaults', on_click=reset_to_defaults)
+
     with st.expander("Design & Accessibility Notes"):
         st.markdown("""
         - **Visual Integrity:** Charts prioritize data clarity by minimizing non-data elements.
@@ -211,24 +248,31 @@ with st.sidebar:
     st.sidebar.info("Data Source: U.S. Bureau of Labor Statistics (BLS).")
 
 # --- Main Dashboard Area ---
-series_ids = get_series_ids(loc_type, selected_location, selected_industry)
-location_data_df = get_bls_data(series_ids, selected_location)
+series_ids = get_series_ids(st.session_state.loc_type, st.session_state.selected_location, st.session_state.selected_industry)
+full_data_df = get_bls_data(series_ids)
+
+# Filter data based on selected base month
+if full_data_df is not None and st.session_state.base_month_str:
+    base_month_ts = pd.to_datetime(st.session_state.base_month_str)
+    display_data_df = full_data_df[full_data_df.index <= base_month_ts]
+else:
+    display_data_df = full_data_df
 
 kpi_col, map_col = st.columns([1, 2])
 
 with kpi_col:
-    st.subheader(f"Key Metrics for {selected_location}")
-    if selected_industry != "Total Nonfarm":
-        st.caption(f"Industry: {selected_industry}")
+    st.subheader(f"Key Metrics for {st.session_state.selected_location}")
+    if st.session_state.selected_industry != "Total Nonfarm":
+        st.caption(f"Industry: {st.session_state.selected_industry}")
 
-    if location_data_df is not None and len(location_data_df) > 1:
-        latest_date = location_data_df.index[-1].strftime('%B %Y')
-        previous_date = location_data_df.index[-2].strftime('%B %Y')
+    if display_data_df is not None and len(display_data_df) > 1:
+        latest_date = display_data_df.index[-1].strftime('%B %Y')
+        previous_date = display_data_df.index[-2].strftime('%B %Y')
 
         for metric in ["Unemployment Rate", "Job Openings", "Quits Rate"]:
-            if metric in location_data_df.columns:
-                latest_val = location_data_df[metric].iloc[-1]
-                prev_val = location_data_df[metric].iloc[-2]
+            if metric in display_data_df.columns:
+                latest_val = display_data_df[metric].iloc[-1]
+                prev_val = display_data_df[metric].iloc[-2]
                 delta = latest_val - prev_val
                 
                 if metric == "Unemployment Rate":
@@ -249,17 +293,16 @@ with map_col:
 
 st.markdown("---")
 
-if location_data_df is not None:
-    # Chart 1: Openings vs Unemployment
-    metrics_for_chart1 = [m for m in ["Job Openings", "Unemployment Rate"] if m in location_data_df.columns]
+if display_data_df is not None:
+    chart_df = display_data_df.last('24M')
+    metrics_for_chart1 = [m for m in ["Job Openings", "Unemployment Rate"] if m in chart_df.columns]
     if len(metrics_for_chart1) == 2:
-        st.plotly_chart(create_time_series_chart(location_data_df, selected_location, metrics_for_chart1), use_container_width=True)
+        st.plotly_chart(create_time_series_chart(chart_df, st.session_state.selected_location, metrics_for_chart1), use_container_width=True)
     
-    # Chart 2: Quits Rate
-    if 'Quits Rate' in location_data_df.columns:
-        st.plotly_chart(create_quits_rate_chart(location_data_df, selected_location), use_container_width=True)
+    if 'Quits Rate' in chart_df.columns:
+        st.plotly_chart(create_quits_rate_chart(chart_df, st.session_state.selected_location), use_container_width=True)
     
-    if not metrics_for_chart1 and 'Quits Rate' not in location_data_df.columns:
-         st.error(f"Could not display historical data for {selected_location}. The selected data series may be unavailable.")
+    if not metrics_for_chart1 and 'Quits Rate' not in chart_df.columns:
+         st.error(f"Could not display historical data for {st.session_state.selected_location}. The selected data series may be unavailable.")
 else:
-    st.error(f"Could not retrieve any historical data for {selected_location}.")
+    st.error(f"Could not retrieve any historical data for {st.session_state.selected_location}.")
