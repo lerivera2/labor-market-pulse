@@ -1,4 +1,4 @@
-# Labor-Market Pulse: Professional Edition
+# Labor-Market Pulse
 # This script fetches, processes, and visualizes U.S. and State-level labor market data,
 # adhering to professional data visualization best practices with an advanced UI.
 
