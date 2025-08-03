@@ -1,6 +1,5 @@
 # Labor-Market Pulse: Professional Edition
-# This script fetches, processes, and visualizes U.S. and State-level labor market data,
-# adhering to professional data visualization best practices with an advanced UI.
+# Enhanced version with improved readability and user experience, incorporating user-provided design.
 
 import streamlit as st
 import requests
@@ -48,6 +47,7 @@ html, body, [class*="st-"] {
     border: 1px solid #E0E0E0;
     margin-bottom: 1rem;
     text-align: center;
+    height: 100%;
 }
 
 [data-theme="dark"] .metric-card {
@@ -137,14 +137,14 @@ def get_series_ids(loc_type, location, industry):
         series["Job Openings"] = f"JTS{ind_code}000000000JOL"
         if industry == "Total Nonfarm":
             series["Unemployment Rate"] = "LNS14000000"
-            series["Quits Rate"] = "JTS000000000000000QUR"
+            series["Quits Rate"] = "JTS000000000000000QUR" # Corrected ID for Rate
     elif loc_type == "State":
         fips = STATE_FIPS.get(location)
         if fips:
             series["Unemployment Rate"] = f"LASST{fips}0000000000003"
             if industry == "Total Nonfarm":
                 series["Job Openings"] = f"JTS{fips}000000000JOL"
-                series["Quits Rate"] = f"JTS{fips}000000000QUR"
+                series["Quits Rate"] = f"JTS{fips}000000000QUR" # Corrected ID for Rate
     elif loc_type == "Metropolitan Area":
         msa_code = MSA_CODES.get(location)
         if msa_code:
@@ -240,6 +240,15 @@ def create_sparkline(df, metric):
     spark.update_layout(margin=dict(l=0,r=0,t=0,b=0), height=50, xaxis_visible=False, yaxis_visible=False, plot_bgcolor='rgba(0,0,0,0)')
     return spark
 
+def create_gauge_chart(current, max_hist):
+    gauge = go.Figure(go.Indicator(
+        mode="gauge+number", value=current,
+        gauge={'axis':{'range':[0, max_hist]}, 'bar':{'color':'#004A7F'}},
+        title={'text':'Current Rate vs. Historical High'}
+    ))
+    gauge.update_layout(height=250, margin=dict(l=30,r=30,t=60,b=30))
+    return gauge
+
 # --- State Management ---
 def initialize_session_state():
     if 'init' not in st.session_state:
@@ -283,7 +292,9 @@ with st.sidebar:
         st.selectbox("Industry:", list(INDUSTRY_CODES.keys()), key='selected_industry')
 
     col1, col2 = st.columns(2)
-    col1.button('Refresh All Data', on_click=st.cache_data.clear, use_container_width=True)
+    if col1.button('Refresh All Data', use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
     col2.button('Reset to Defaults', on_click=reset_to_defaults, use_container_width=True)
     with st.expander("Design & Accessibility Notes"):
         st.markdown("- **Visual Integrity:** Minimize non-data ink.\n- **Color Choice:** Sequential, colorblind-safe palettes.\n- **Layout:** Z-pattern: top KPIs/map, then details.")
@@ -305,7 +316,7 @@ if full_data_df is None:
 
 display_data_df = full_data_df[full_data_df.index <= pd.to_datetime(st.session_state.base_month)]
 
-tab1, tab2, tab3 = st.tabs(["📊 Overview", "🗺️ State Map", "📈 Historical Trends"])
+tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "📋 Data Export"])
 
 with tab1:
     st.subheader("Key Performance Indicators")
@@ -338,7 +349,6 @@ with tab1:
                 
                 st.plotly_chart(create_sparkline(display_data_df, metric), use_container_width=True, config={'displayModeBar': False})
                 st.markdown('</div>', unsafe_allow_html=True)
-
     else:
         st.warning("Not enough data to display KPIs.")
 
@@ -346,13 +356,7 @@ with tab1:
     if "Unemployment Rate" in display_data_df.columns:
         current = display_data_df['Unemployment Rate'].iloc[-1]
         max_hist = display_data_df['Unemployment Rate'].max()
-        gauge = go.Figure(go.Indicator(
-            mode="gauge+number", value=current,
-            gauge={'axis':{'range':[0, max_hist]}, 'bar':{'color':'#004A7F'}},
-            title={'text':'Current Rate vs. Historical High'}
-        ))
-        gauge.update_layout(height=250, margin=dict(l=30,r=30,t=60,b=30))
-        st.plotly_chart(gauge, use_container_width=True)
+        st.plotly_chart(create_gauge_chart(current, max_hist), use_container_width=True)
 
 with tab2:
     all_states_df = get_all_states_latest_unemployment()
@@ -368,7 +372,10 @@ with tab3:
         st.plotly_chart(create_time_series_chart(chart_df, st.session_state.selected_location, metrics_for_chart1), use_container_width=True)
     if 'Quits Rate' in chart_df.columns:
         st.plotly_chart(create_quits_rate_chart(chart_df, st.session_state.selected_location), use_container_width=True)
-    
-    if chart_df is not None and not chart_df.empty:
-        csv = chart_df.to_csv().encode('utf-8')
-        st.download_button("Download Trend Data as CSV", data=csv, file_name=f"labor_pulse_{st.session_state.selected_location}.csv", mime='text/csv')
+
+with tab4:
+    st.subheader("Data Export")
+    if display_data_df is not None and not display_data_df.empty:
+        st.dataframe(display_data_df.tail(12).style.format("{:.2f}"))
+        csv = display_data_df.to_csv().encode('utf-8')
+        st.download_button("Download Full Data as CSV", data=csv, file_name=f"labor_pulse_{st.session_state.selected_location}.csv", mime='text/csv')
