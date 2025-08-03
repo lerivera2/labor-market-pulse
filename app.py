@@ -222,14 +222,19 @@ with st.sidebar:
     base_data_df = get_bls_data(get_series_ids("U.S. Total", "U.S. Total", "Total Nonfarm"))
     if base_data_df is not None:
         min_date, max_date = base_data_df.index.min(), base_data_df.index.max()
-        if st.session_state.base_month is None:
-            st.session_state.base_month = max_date
         
-        st.session_state.base_month = st.slider("Select Base Month:", 
-                                                 min_value=min_date.to_pydatetime(), 
-                                                 max_value=max_date.to_pydatetime(), 
-                                                 value=st.session_state.base_month, 
-                                                 format="MMM YYYY")
+        # Ensure base_month is initialized correctly as a standard Python datetime object
+        if st.session_state.base_month is None:
+            st.session_state.base_month = max_date.to_pydatetime()
+        
+        # The slider's value will be a datetime object from session_state.
+        # The slider itself returns a datetime object, maintaining type consistency.
+        selected_date = st.slider("Select Base Month:", 
+                                  min_value=min_date.to_pydatetime(), 
+                                  max_value=max_date.to_pydatetime(), 
+                                  value=st.session_state.base_month, 
+                                  format="MMM YYYY")
+        st.session_state.base_month = selected_date
 
     st.radio("Location Type:", ["U.S. Total", "State", "Metropolitan Area"], key='loc_type', horizontal=True)
     if st.session_state.loc_type == "State":
