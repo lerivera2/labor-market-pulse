@@ -1,5 +1,5 @@
 # Labor-Market Pulse: Professional Edition
-# Enhanced version with improved readability and user experience, incorporating user-provided design.
+# Final version incorporating advanced UI, narrative flow, and a cohesive design system.
 
 import streamlit as st
 import requests
@@ -63,13 +63,13 @@ html, body, [class*="st-"] {
 }
 
 .metric-value {
-    font-size: 2.2rem;
+    font-size: 2.5rem;
     font-weight: 700;
-    line-height: 1.2;
+    line-height: 1.1;
 }
 
 .metric-delta {
-    font-size: 1rem;
+    font-size: 0.9rem;
     font-weight: 600;
     margin-top: 0.5rem;
 }
@@ -79,6 +79,16 @@ html, body, [class*="st-"] {
 }
 .stTabs [data-baseweb="tab"] {
     border-radius: 8px;
+}
+.national-snapshot h5 {
+    font-weight: 600;
+    font-size: 1rem;
+    text-align: center;
+    margin-bottom: 1rem;
+}
+.national-snapshot p {
+    font-size: 0.9rem;
+    margin-bottom: 0.5rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -137,14 +147,14 @@ def get_series_ids(loc_type, location, industry):
         series["Job Openings"] = f"JTS{ind_code}000000000JOL"
         if industry == "Total Nonfarm":
             series["Unemployment Rate"] = "LNS14000000"
-            series["Quits Rate"] = "JTS000000000000000QUR" # Corrected ID for Rate
+            series["Quits Rate"] = "JTS000000000000000QUR"
     elif loc_type == "State":
         fips = STATE_FIPS.get(location)
         if fips:
             series["Unemployment Rate"] = f"LASST{fips}0000000000003"
             if industry == "Total Nonfarm":
                 series["Job Openings"] = f"JTS{fips}000000000JOL"
-                series["Quits Rate"] = f"JTS{fips}000000000QUR" # Corrected ID for Rate
+                series["Quits Rate"] = f"JTS{fips}000000000QUR"
     elif loc_type == "Metropolitan Area":
         msa_code = MSA_CODES.get(location)
         if msa_code:
@@ -206,14 +216,14 @@ def get_all_states_latest_unemployment():
 # --- Visualization Components ---
 def create_choropleth_map(df):
     fig = px.choropleth(df, locations='State_Abbr', locationmode="USA-states", color='Unemployment Rate',
-                        color_continuous_scale="Viridis", scope="usa", hover_name='State',
+                        color_continuous_scale="Blues", scope="usa", hover_name='State',
                         title="Latest Unemployment Rate by State", labels={'Unemployment Rate': 'Rate (%)'})
     fig.update_layout(margin=dict(t=40,b=0,l=0,r=0), title_x=0.5, geo=dict(bgcolor='rgba(0,0,0,0)'))
     return fig
 
 def create_time_series_chart(df, location, metrics):
     fig = go.Figure()
-    colors = {'openings': '#004A7F', 'unemployment': '#FF7F0E', 'grid': '#ddd'}
+    colors = {'openings': '#0D6EFD', 'unemployment': '#6C757D', 'grid': '#ddd'}
     if 'Job Openings' in metrics:
         fig.add_trace(go.Scatter(x=df.index, y=df['Job Openings'] / 1000, name='Job Openings (K)', mode='lines', line=dict(color=colors['openings'], width=2.5)))
     if 'Unemployment Rate' in metrics:
@@ -228,7 +238,7 @@ def create_time_series_chart(df, location, metrics):
 
 def create_quits_rate_chart(df, location):
     fig = go.Figure()
-    fig.add_trace(go.Scatter(x=df.index, y=df['Quits Rate'], name='Quits Rate (%)', mode='lines', line=dict(color='#2ca02c', width=2.5)))
+    fig.add_trace(go.Scatter(x=df.index, y=df['Quits Rate'], name='Quits Rate (%)', mode='lines', line=dict(color='#198754', width=2.5)))
     fig.update_layout(title=dict(text=f'<b>Quits Rate Trend for {location}</b>', font_size=16, x=0.5),
                       xaxis=dict(title_text='Date', showgrid=False),
                       yaxis=dict(title=dict(text='Quits Rate (%)'), showgrid=True, gridcolor='#ddd'),
@@ -243,7 +253,7 @@ def create_sparkline(df, metric):
 def create_gauge_chart(current, max_hist):
     gauge = go.Figure(go.Indicator(
         mode="gauge+number", value=current,
-        gauge={'axis':{'range':[0, max_hist]}, 'bar':{'color':'#004A7F'}},
+        gauge={'axis':{'range':[0, max_hist]}, 'bar':{'color':'#0D6EFD'}},
         title={'text':'Current Rate vs. Historical High'}
     ))
     gauge.update_layout(height=250, margin=dict(l=30,r=30,t=60,b=30))
@@ -334,7 +344,6 @@ with tab1:
                 latest_val = display_data_df[metric].iloc[-1]
                 delta = latest_val - display_data_df[metric].iloc[-2]
                 
-                # Custom HTML for metric display
                 st.markdown(f'<div class="metric-label">{metric} ({latest_date_str})</div>', unsafe_allow_html=True)
                 if metric == "Job Openings":
                     value_str = f"{latest_val/1e6:.2f}M" if latest_val >= 1e6 else f"{latest_val/1e3:,.0f}K"
