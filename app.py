@@ -1,5 +1,5 @@
-# Labor-Market Pulse: Professional Edition
-# Final version incorporating an API-aware UI, narrative flow, and a cohesive design system.
+# Labor-Market Pulse Dash
+
 
 import streamlit as st
 import requests
@@ -347,8 +347,15 @@ if 'last_updated' not in st.session_state or st.session_state.last_updated is No
 
 display_data_df = full_data_df[full_data_df.index <= pd.to_datetime(st.session_state.base_month)]
 
+# Dynamic "Data As Of" message
 if not display_data_df.empty:
-    st.markdown(f"<p class='sub-header'>Data as of {display_data_df.index[-1].strftime('%B %Y')}</p>", unsafe_allow_html=True)
+    selected_month_ts = pd.to_datetime(st.session_state.base_month)
+    latest_available_ts = display_data_df.index[-1]
+    
+    if selected_month_ts.year > latest_available_ts.year or selected_month_ts.month > latest_available_ts.month:
+        st.warning(f"Data for {selected_month_ts.strftime('%B %Y')} is not yet available. Showing data as of {latest_available_ts.strftime('%B %Y')}.")
+    else:
+        st.markdown(f"<p class='sub-header'>Data as of {latest_available_ts.strftime('%B %Y')}</p>", unsafe_allow_html=True)
 
 # Custom Tabs using st.radio
 tab_options = ["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "📋 Data Export"]
