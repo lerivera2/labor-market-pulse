@@ -15,7 +15,6 @@ import logging
 from dataclasses import dataclass, field
 from functools import wraps, lru_cache
 from typing import List, Dict, Any, Optional, Callable
-from statsmodels.tsa.seasonal import seasonal_decompose
 import contextlib
 
 # --- 1. Configuration Management ---
@@ -423,19 +422,6 @@ class ChartFactory:
         gauge.update_layout(height=250, margin=dict(l=30,r=30,t=60,b=30))
         return gauge
 
-    def create_trend_decomposition_chart(self, df: pd.DataFrame, metric: str) -> go.Figure:
-        decomposition = seasonal_decompose(df[metric].dropna(), model='additive', period=12)
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df.index, y=decomposition.trend, name='Trend', mode='lines', line=dict(color=self.config.COLORS['primary'])))
-        fig.add_trace(go.Scatter(x=df.index, y=decomposition.seasonal, name='Seasonality', mode='lines', line=dict(color=self.config.COLORS['secondary'])))
-        fig.update_layout(title=f'Trend Decomposition for {metric}', height=300, legend=dict(orientation='h', y=1.1, x=0.5, xanchor='center'))
-        return fig
-
-    def create_correlation_heatmap(self, df: pd.DataFrame) -> go.Figure:
-        corr_matrix = df.corr()
-        fig = px.imshow(corr_matrix, text_auto=True, aspect="auto", color_continuous_scale='RdBu_r', title='Correlation Matrix')
-        return fig
-
 # --- 7. Main Application Class ---
 class LaborMarketApp:
     def __init__(self):
@@ -507,7 +493,7 @@ class LaborMarketApp:
                 delta = latest_val - df[metric].iloc[-2]
                 
                 value_str = f"{latest_val/1e6:.2f}M" if metric == "Job Openings" and latest_val >= 1e6 else f"{latest_val/1e3:,.0f}K" if metric == "Job Openings" else f"{latest_val:.1f}%"
-                delta_str = f"{delta/1e3:,.1f}K" if metric == "Job Openings" else f"{delta:+.2f}%"
+                delta_str = f"{delta/1e3:+.1f}K" if metric == "Job Openings" else f"{delta:+.2f}%"
                 
                 st.metric(label=f"{metric} ({latest_date_str})", value=value_str, delta=f"{delta_str} vs {previous_date_str}", delta_color="inverse" if metric == "Unemployment Rate" else "normal")
                 st.plotly_chart(self.chart_factory.create_sparkline(df, metric), use_container_width=True, config={'displayModeBar': False})
@@ -575,7 +561,7 @@ class LaborMarketApp:
             else:
                 st.markdown(f"<p class='sub-header'>Data as of {latest_available_ts.strftime('%B %Y')}</p>", unsafe_allow_html=True)
 
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "🔬 Analysis", "📋 Data Export"])
+        tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "📋 Data Export"])
 
         with tab1:
             self._render_overview_tab(display_data_df)
@@ -588,8 +574,6 @@ class LaborMarketApp:
         with tab3:
             self._render_trends_tab(display_data_df.last('24M'), loc_title, self.state.get('selected_industry'))
         with tab4:
-            self._render_analysis_tab(display_data_df)
-        with tab5:
             st.subheader("Data Export")
             if display_data_df is not None and not display_data_df.empty:
                 st.dataframe(display_data_df.tail(12).style.format("{:.2f}"))
