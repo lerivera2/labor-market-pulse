@@ -1,6 +1,3 @@
-a# Labor-Market Pulse: Professional Edition
-# Final version incorporating an API-aware UI, narrative flow, and a cohesive design system.
-
 import streamlit as st
 import requests
 import pandas as pd
