@@ -307,7 +307,8 @@ with st.sidebar:
         st.markdown("- **Visual Integrity:** Minimize non-data ink.\n- **Color Choice:** Sequential, colorblind-safe palettes.\n- **Layout:** Z-pattern: top KPIs/map, then details.")
     st.info("Data Source: U.S. Bureau of Labor Statistics (BLS)")
     
-    if st.session_state.last_updated:
+    # Corrected check for last_updated
+    if 'last_updated' in st.session_state and st.session_state.last_updated is not None:
         st.caption(f"Data last refreshed: {st.session_state.last_updated.strftime('%Y-%m-%d %H:%M:%S %Z')}")
 
 # --- Main Dashboard Area ---
@@ -324,11 +325,11 @@ full_data_df = get_bls_data(series_ids)
 
 if full_data_df is None:
     st.error("Could not retrieve data for the selected filters. Please try a different selection.")
-    if st.session_state.last_updated is None:
+    if 'last_updated' not in st.session_state or st.session_state.last_updated is None:
         st.session_state.last_updated = pd.Timestamp.now(tz="UTC")
     st.stop()
 
-if st.session_state.last_updated is None:
+if 'last_updated' not in st.session_state or st.session_state.last_updated is None:
     st.session_state.last_updated = pd.Timestamp.now(tz="UTC")
 
 display_data_df = full_data_df[full_data_df.index <= pd.to_datetime(st.session_state.base_month)]
