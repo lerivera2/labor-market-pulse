@@ -255,6 +255,7 @@ def initialize_session_state():
         st.session_state.selected_industry = "Total Nonfarm"
         st.session_state.base_month = None
         st.session_state.active_tab = "📊 Overview"
+        st.session_state.last_updated = None
         st.session_state.init = True
 
 def reset_to_defaults():
@@ -263,6 +264,10 @@ def reset_to_defaults():
     st.session_state.selected_industry = "Total Nonfarm"
     st.session_state.base_month = None
     st.session_state.active_tab = "📊 Overview"
+
+def refresh_data():
+    st.cache_data.clear()
+    st.session_state.last_updated = pd.Timestamp.now(tz="UTC")
 
 initialize_session_state()
 
@@ -296,13 +301,14 @@ with st.sidebar:
         st.selectbox("Industry:", list(INDUSTRY_CODES.keys()), key='selected_industry')
 
     col1, col2 = st.columns(2)
-    if col1.button('Refresh All Data', use_container_width=True):
-        st.cache_data.clear()
-        st.rerun()
+    col1.button('Refresh All Data', on_click=refresh_data, use_container_width=True)
     col2.button('Reset All', on_click=reset_to_defaults, use_container_width=True)
     with st.expander("Design & Accessibility Notes"):
         st.markdown("- **Visual Integrity:** Minimize non-data ink.\n- **Color Choice:** Sequential, colorblind-safe palettes.\n- **Layout:** Z-pattern: top KPIs/map, then details.")
     st.info("Data Source: U.S. Bureau of Labor Statistics (BLS)")
+    
+    if st.session_state.last_updated:
+        st.caption(f"Data last refreshed: {st.session_state.last_updated.strftime('%Y-%m-%d %H:%M:%S %Z')}")
 
 # --- Main Dashboard Area ---
 st.markdown('<h1 class="main-title">Labor Market Pulse</h1>', unsafe_allow_html=True)
@@ -318,7 +324,12 @@ full_data_df = get_bls_data(series_ids)
 
 if full_data_df is None:
     st.error("Could not retrieve data for the selected filters. Please try a different selection.")
+    if st.session_state.last_updated is None:
+        st.session_state.last_updated = pd.Timestamp.now(tz="UTC")
     st.stop()
+
+if st.session_state.last_updated is None:
+    st.session_state.last_updated = pd.Timestamp.now(tz="UTC")
 
 display_data_df = full_data_df[full_data_df.index <= pd.to_datetime(st.session_state.base_month)]
 
