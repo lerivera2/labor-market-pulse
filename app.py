@@ -1,5 +1,5 @@
-# Labor-Market Pulse Dash
-
+# Labor-Market Pulse: Professional Edition
+# Final version incorporating an API-aware UI, narrative flow, and a cohesive design system.
 
 import streamlit as st
 import requests
@@ -148,6 +148,7 @@ def get_series_ids(loc_type, location, industry):
     elif loc_type == "Metropolitan Area":
         msa_code = MSA_CODES.get(location)
         if msa_code:
+            # Corrected Series ID format for Metropolitan Areas
             series["Unemployment Rate"] = f"LAUMT{msa_code}03"
     return series
 
@@ -347,7 +348,6 @@ if 'last_updated' not in st.session_state or st.session_state.last_updated is No
 
 display_data_df = full_data_df[full_data_df.index <= pd.to_datetime(st.session_state.base_month)]
 
-# Dynamic "Data As Of" message
 if not display_data_df.empty:
     selected_month_ts = pd.to_datetime(st.session_state.base_month)
     latest_available_ts = display_data_df.index[-1]
