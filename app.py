@@ -491,6 +491,7 @@ class LaborMarketApp:
         cols = st.columns(len(metrics))
         for i, metric in enumerate(metrics):
             with cols[i]:
+                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                 latest_val = df[metric].iloc[-1]
                 delta = latest_val - df[metric].iloc[-2]
                 
@@ -499,6 +500,7 @@ class LaborMarketApp:
                 
                 st.metric(label=f"{metric} ({latest_date_str})", value=value_str, delta=f"{delta_str} vs {previous_date_str}", delta_color="inverse" if metric == "Unemployment Rate" else "normal")
                 st.plotly_chart(self.chart_factory.create_sparkline(df, metric), use_container_width=True, config={'displayModeBar': False})
+                st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("---")
         if "Unemployment Rate" in df.columns:
