@@ -16,6 +16,7 @@ from dataclasses import dataclass, field
 from functools import wraps, lru_cache
 from typing import List, Dict, Any, Optional, Callable
 from statsmodels.tsa.seasonal import seasonal_decompose
+import contextlib # <-- ADDED THIS IMPORT
 
 # --- 1. Configuration Management ---
 @dataclass
@@ -500,18 +501,14 @@ class LaborMarketApp:
 
     def _render_analysis_tab(self, df: pd.DataFrame):
         st.subheader("Statistical Analysis")
-        
-        # Descriptive Statistics
         st.markdown("#### Descriptive Statistics")
         st.dataframe(df.describe().style.format("{:.2f}"))
 
-        # Trend Decomposition
         st.markdown("#### Trend Decomposition (12-Month Seasonality)")
         for metric in df.select_dtypes(include='number').columns:
-            if len(df[metric].dropna()) > 24: # Need at least 2 full cycles
+            if len(df[metric].dropna()) > 24:
                 st.plotly_chart(self.chart_factory.create_trend_decomposition_chart(df, metric), use_container_width=True)
 
-        # Correlation Analysis
         if len(df.select_dtypes(include='number').columns) > 1:
             st.markdown("#### Correlation Matrix")
             st.plotly_chart(self.chart_factory.create_correlation_heatmap(df), use_container_width=True)
@@ -570,6 +567,5 @@ class LaborMarketApp:
                 st.download_button("Download Full Data as CSV", data=csv, file_name=f"labor_pulse_{loc_title}.csv", mime='text/csv')
 
 if __name__ == "__main__":
-    import contextlib
     app = LaborMarketApp()
     app.run()
