@@ -283,6 +283,31 @@ class BLSAPIClient:
                     break
         if not all_series_data: return None
         return pd.concat(all_series_data, axis=1).sort_index().ffill()
+    
+    @st.cache_data(ttl=3600)
+    def get_all_states_latest_unemployment(_self): # Use _self to avoid conflict with instance self
+        series_ids = {f"LASST{fips}0000000000003": name for name, fips in DataMappings.STATE_FIPS.items()}
+        end_year, start_year = date.today().year, (date.today() - timedelta(days=12*30)).year
+        headers = {'Content-type': 'application/json'}
+        series_chunks = [list(series_ids.keys())[i:i + 50] for i in range(0, len(series_ids), 50)]
+        latest_data = {}
+        for chunk in series_chunks:
+            data = json.dumps({"seriesid": chunk, "startyear": str(start_year), "endyear": str(end_year), "registrationkey": _self.secure_config.bls_api_key})
+            try:
+                response = _self.session.post(_self.config.API_URL, data=data, headers=headers, timeout=20)
+                response.raise_for_status()
+                json_data = response.json()
+                if json_data['status'] == 'REQUEST_SUCCEEDED':
+                    for series in json_data['Results']['series']:
+                        if series['data']:
+                            state_name = series_ids[series['seriesID']]
+                            latest_value = pd.to_numeric(pd.DataFrame(series['data'])['value']).iloc[-1]
+                            latest_data[state_name] = latest_value
+            except requests.exceptions.RequestException: continue
+        if not latest_data: return None
+        df = pd.DataFrame(list(latest_data.items()), columns=['State', 'Unemployment Rate'])
+        df['State_Abbr'] = df['State'].map(DataMappings.STATE_MAPPING)
+        return df
 
 # --- 4. Data Validation ---
 class DataValidator:
@@ -316,7 +341,6 @@ class SessionStateManager:
         'selected_location': "U.S. Total",
         'selected_industry': "Total Nonfarm",
         'base_month': None,
-        'active_tab': "📊 Overview",
         'last_updated': None,
         'init': True
     }
@@ -553,19 +577,19 @@ class LaborMarketApp:
 
         tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "🔬 Analysis", "📋 Data Export"])
 
-        if tab1:
+        with tab1:
             self._render_overview_tab(display_data_df)
-        if tab2:
+        with tab2:
             all_states_df = self.api_client.get_all_states_latest_unemployment()
             if all_states_df is not None:
                 st.plotly_chart(self.chart_factory.create_choropleth_map(all_states_df), use_container_width=True)
             else:
                 st.warning("Could not load map data.")
-        if tab3:
+        with tab3:
             self._render_trends_tab(display_data_df.last('24M'), loc_title, self.state.get('selected_industry'))
-        if tab4:
+        with tab4:
             self._render_analysis_tab(display_data_df)
-        if tab5:
+        with tab5:
             st.subheader("Data Export")
             if display_data_df is not None and not display_data_df.empty:
                 st.dataframe(display_data_df.tail(12).style.format("{:.2f}"))
