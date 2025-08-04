@@ -1,4 +1,4 @@
-a# Labor-Market Pulse: Professional Edition
+# Labor-Market Pulse: Professional Edition
 # Final version incorporating an API-aware UI, narrative flow, and a cohesive design system.
 
 import streamlit as st
@@ -142,7 +142,6 @@ def get_series_ids(loc_type, location, industry):
     elif loc_type == "Metropolitan Area":
         msa_code = MSA_CODES.get(location)
         if msa_code:
-            # Corrected Series ID format for Metropolitan Areas
             series["Unemployment Rate"] = f"LAUMT{msa_code}03"
     return series
 
