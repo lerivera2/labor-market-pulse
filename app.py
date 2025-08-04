@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from functools import wraps, lru_cache
 from typing import List, Dict, Any, Optional, Callable
 from statsmodels.tsa.seasonal import seasonal_decompose
-import contextlib # <-- ADDED THIS IMPORT
+import contextlib
 
 # --- 1. Configuration Management ---
 @dataclass
@@ -130,16 +130,6 @@ def handle_errors(default_return: Any = None, show_error: bool = True) -> Callab
                 if show_error:
                     st.error(f"An unexpected error occurred in {func.__name__}. Please check the logs.")
                 return default_return
-        return wrapper
-    return decorator
-
-def render_with_loading(message: str = "Processing...") -> Callable:
-    """Decorator to show a loading spinner during execution."""
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            with st.spinner(message):
-                return func(*args, **kwargs)
         return wrapper
     return decorator
 
@@ -309,7 +299,6 @@ class DataValidator:
 
     @staticmethod
     def check_data_quality(df: pd.DataFrame) -> pd.DataFrame:
-        # Simple outlier removal using IQR
         for col in df.select_dtypes(include='number').columns:
             Q1 = df[col].quantile(0.25)
             Q3 = df[col].quantile(0.75)
@@ -376,6 +365,24 @@ class ChartFactory:
                           yaxis2=dict(title=dict(text='Unemployment (%)'), overlaying='y', side='right', showgrid=False),
                           legend=dict(orientation='h', yanchor='bottom', y=1.02, xanchor='right', x=1),
                           template='plotly_white', height=350, margin=dict(l=50, r=50, t=50, b=20), hovermode='x unified')
+        return fig
+    
+    def create_single_metric_chart(self, df: pd.DataFrame, title: str, metric_name: str, color: str) -> go.Figure:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df.index, y=df[metric_name], name=metric_name, mode='lines', line=dict(color=color, width=2.5)))
+        fig.update_layout(title=dict(text=f'<b>{title}</b>', font_size=16, x=0.5),
+                          xaxis=dict(title_text='Date', showgrid=False),
+                          yaxis=dict(title=dict(text=metric_name), showgrid=True, gridcolor='#ddd'),
+                          template='plotly_white', height=350, margin=dict(l=50, r=50, t=50, b=50), hovermode='x unified')
+        return fig
+
+    def create_quits_rate_chart(self, df: pd.DataFrame, location: str) -> go.Figure:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=df.index, y=df['Quits Rate'], name='Quits Rate (%)', mode='lines', line=dict(color=self.config.COLORS['success'], width=2.5)))
+        fig.update_layout(title=dict(text=f'<b>Quits Rate Trend for {location}</b>', font_size=16, x=0.5),
+                          xaxis=dict(title_text='Date', showgrid=False),
+                          yaxis=dict(title=dict(text='Quits Rate (%)'), showgrid=True, gridcolor='#ddd'),
+                          template='plotly_white', height=300, margin=dict(l=50, r=50, t=50, b=50), hovermode='x unified')
         return fig
 
     def create_sparkline(self, df: pd.DataFrame, metric: str) -> go.Figure:
@@ -544,22 +551,21 @@ class LaborMarketApp:
             else:
                 st.markdown(f"<p class='sub-header'>Data as of {latest_available_ts.strftime('%B %Y')}</p>", unsafe_allow_html=True)
 
-        tab_options = ["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "🔬 Analysis", "📋 Data Export"]
-        active_tab = st.radio("", tab_options, key='active_tab', horizontal=True, label_visibility="collapsed")
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "🔬 Analysis", "📋 Data Export"])
 
-        if active_tab == "📊 Overview":
+        if tab1:
             self._render_overview_tab(display_data_df)
-        elif active_tab == "🗺️ State Map":
-            all_states_df = get_all_states_latest_unemployment()
+        if tab2:
+            all_states_df = self.api_client.get_all_states_latest_unemployment()
             if all_states_df is not None:
                 st.plotly_chart(self.chart_factory.create_choropleth_map(all_states_df), use_container_width=True)
             else:
                 st.warning("Could not load map data.")
-        elif active_tab == "📈 Historical Trends":
+        if tab3:
             self._render_trends_tab(display_data_df.last('24M'), loc_title, self.state.get('selected_industry'))
-        elif active_tab == "🔬 Analysis":
+        if tab4:
             self._render_analysis_tab(display_data_df)
-        elif active_tab == "📋 Data Export":
+        if tab5:
             st.subheader("Data Export")
             if display_data_df is not None and not display_data_df.empty:
                 st.dataframe(display_data_df.tail(12).style.format("{:.2f}"))
