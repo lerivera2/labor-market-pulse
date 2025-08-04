@@ -1,6 +1,3 @@
-# Labor-Market Pulse: Production-Optimized Professional Edition
-# A comprehensive, production-ready Streamlit application for labor market analysis.
-
 import streamlit as st
 import requests
 import pandas as pd
@@ -15,6 +12,7 @@ import logging
 from dataclasses import dataclass, field
 from functools import wraps, lru_cache
 from typing import List, Dict, Any, Optional, Callable
+from statsmodels.tsa.seasonal import seasonal_decompose
 import contextlib
 
 # --- 1. Configuration Management ---
@@ -352,6 +350,7 @@ class SessionStateManager:
                 st.session_state[key] = value
 
     def reset(self):
+        st.cache_data.clear()
         for key, value in self.DEFAULTS.items():
             st.session_state[key] = value
 
@@ -516,20 +515,6 @@ class LaborMarketApp:
         if 'Quits Rate' in df.columns and not df['Quits Rate'].dropna().empty:
             st.plotly_chart(self.chart_factory.create_quits_rate_chart(df, title), use_container_width=True)
 
-    def _render_analysis_tab(self, df: pd.DataFrame):
-        st.subheader("Statistical Analysis")
-        st.markdown("#### Descriptive Statistics")
-        st.dataframe(df.describe().style.format("{:.2f}"))
-
-        st.markdown("#### Trend Decomposition (12-Month Seasonality)")
-        for metric in df.select_dtypes(include='number').columns:
-            if len(df[metric].dropna()) > 24:
-                st.plotly_chart(self.chart_factory.create_trend_decomposition_chart(df, metric), use_container_width=True)
-
-        if len(df.select_dtypes(include='number').columns) > 1:
-            st.markdown("#### Correlation Matrix")
-            st.plotly_chart(self.chart_factory.create_correlation_heatmap(df), use_container_width=True)
-
     def run(self):
         st.markdown('<h1 class="main-title">Labor Market Pulse</h1>', unsafe_allow_html=True)
         self._render_sidebar()
@@ -542,7 +527,9 @@ class LaborMarketApp:
         st.header(f"Dashboard for {loc_title}")
 
         series_ids = DataMappings.get_series_ids(self.state.get('loc_type'), self.state.get('selected_location'), self.state.get('selected_industry'))
-        full_data_df = self.api_client.get_data(series_ids, self.config.YEARS_OF_DATA)
+        
+        with st.spinner("Fetching data from BLS API..."):
+            full_data_df = self.api_client.get_data(series_ids, self.config.YEARS_OF_DATA)
 
         if full_data_df is None:
             st.error("Could not retrieve data for the selected filters. Please try a different selection.")
@@ -566,6 +553,8 @@ class LaborMarketApp:
         with tab1:
             self._render_overview_tab(display_data_df)
         with tab2:
+            if self.state.get('loc_type') == "U.S. Total" and self.state.get('selected_industry') != "Total Nonfarm":
+                st.info("Please note: The map below displays the overall 'Total Nonfarm' unemployment rate for each state, as industry-specific unemployment data is not available at the state level.")
             all_states_df = self.api_client.get_all_states_latest_unemployment()
             if all_states_df is not None:
                 st.plotly_chart(self.chart_factory.create_choropleth_map(all_states_df), use_container_width=True)
