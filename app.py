@@ -444,15 +444,12 @@ class LaborMarketApp:
                 selected_date = st.slider("Select Base Month:", min_value=min_date.to_pydatetime(), max_value=max_date.to_pydatetime(), value=self.state.get('base_month'), format="MMM YYYY")
                 self.state.set('base_month', selected_date)
 
-            self.state.set('loc_type', st.radio("Location Type:", ["U.S. Total", "State", "Metropolitan Area"], index=["U.S. Total", "State", "Metropolitan Area"].index(self.state.get('loc_type')), horizontal=True))
+            self.state.set('loc_type', st.radio("Location Type:", ["U.S. Total", "State"], index=["U.S. Total", "State"].index(self.state.get('loc_type')), horizontal=True))
             
             if self.state.get('loc_type') == "State":
                 self.state.set('selected_location', st.selectbox("State:", sorted(DataMappings.STATE_FIPS.keys()), index=sorted(DataMappings.STATE_FIPS.keys()).index(self.state.get('selected_location')) if self.state.get('selected_location') in DataMappings.STATE_FIPS else 0))
                 self.state.set('selected_industry', "Total Nonfarm")
-            elif self.state.get('loc_type') == "Metropolitan Area":
-                self.state.set('selected_location', st.selectbox("Metro Area:", sorted(DataMappings.MSA_CODES.keys()), index=sorted(DataMappings.MSA_CODES.keys()).index(self.state.get('selected_location')) if self.state.get('selected_location') in DataMappings.MSA_CODES else 0))
-                self.state.set('selected_industry', "Total Nonfarm")
-            else:
+            else: # US Total
                 self.state.set('selected_location', "U.S. Total")
                 self.state.set('selected_industry', st.selectbox("Industry:", list(DataMappings.INDUSTRY_CODES.keys()), index=list(DataMappings.INDUSTRY_CODES.keys()).index(self.state.get('selected_industry'))))
 
@@ -486,7 +483,6 @@ class LaborMarketApp:
         cols = st.columns(len(metrics))
         for i, metric in enumerate(metrics):
             with cols[i]:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                 latest_val = df[metric].iloc[-1]
                 delta = latest_val - df[metric].iloc[-2]
                 
@@ -495,7 +491,6 @@ class LaborMarketApp:
                 
                 st.metric(label=f"{metric} ({latest_date_str})", value=value_str, delta=f"{delta_str} vs {previous_date_str}", delta_color="inverse" if metric == "Unemployment Rate" else "normal")
                 st.plotly_chart(self.chart_factory.create_sparkline(df, metric), use_container_width=True, config={'displayModeBar': False})
-                st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("---")
         if "Unemployment Rate" in df.columns:
