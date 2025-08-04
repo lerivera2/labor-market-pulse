@@ -1,4 +1,4 @@
-# Labor-Market Pulse: Professional Edition
+a# Labor-Market Pulse: Professional Edition
 # Final version incorporating an API-aware UI, narrative flow, and a cohesive design system.
 
 import streamlit as st
@@ -148,8 +148,7 @@ def get_series_ids(loc_type, location, industry):
     elif loc_type == "Metropolitan Area":
         msa_code = MSA_CODES.get(location)
         if msa_code:
-            # Corrected Series ID format for Metropolitan Areas
-            series["Unemployment Rate"] = f"LAUMT{msa_code}03"
+            series["Unemployment Rate"] = f"LASMT{msa_code}0000000000003"
     return series
 
 @st.cache_data(ttl=3600)
@@ -319,7 +318,7 @@ with st.sidebar:
     col1.button('Refresh All Data', on_click=refresh_data, use_container_width=True)
     col2.button('Reset All', on_click=reset_to_defaults, use_container_width=True)
     with st.expander("Design & Accessibility Notes"):
-        st.markdown("- **Visual Integrity:** Minimize non-data ink.\n- **Color Choice:** Sequential, colorblind-safe palettes.\n- **Layout:** Z-pattern: top KPIs/map, then details.")
+        st.markdown("- **Data Adjustment:** Most data is seasonally adjusted. National industry-level unemployment rates are not seasonally adjusted.\n- **Visual Integrity:** Minimize non-data ink.\n- **Color Choice:** Sequential, colorblind-safe palettes.")
     st.info("Data Source: U.S. Bureau of Labor Statistics (BLS)")
     
     if 'last_updated' in st.session_state and st.session_state.last_updated is not None:
