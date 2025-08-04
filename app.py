@@ -36,6 +36,12 @@ html, body, [class*="st-"] {
     font-size: 2.5rem;
     font-weight: 700;
     text-align: center;
+    margin-bottom: 0.5rem;
+}
+
+.sub-header {
+    text-align: center;
+    color: #6c757d;
     margin-bottom: 2rem;
 }
 
@@ -224,6 +230,15 @@ def create_time_series_chart(df, title, metrics, industry):
                       template='plotly_white', height=350, margin=dict(l=50, r=50, t=50, b=20), hovermode='x unified')
     return fig
 
+def create_single_metric_chart(df, title, metric_name, color):
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df.index, y=df[metric_name], name=metric_name, mode='lines', line=dict(color=color, width=2.5)))
+    fig.update_layout(title=dict(text=f'<b>{title}</b>', font_size=16, x=0.5),
+                      xaxis=dict(title_text='Date', showgrid=False),
+                      yaxis=dict(title=dict(text=metric_name), showgrid=True, gridcolor='#ddd'),
+                      template='plotly_white', height=350, margin=dict(l=50, r=50, t=50, b=50), hovermode='x unified')
+    return fig
+
 def create_quits_rate_chart(df, location):
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df.index, y=df['Quits Rate'], name='Quits Rate (%)', mode='lines', line=dict(color='#198754', width=2.5)))
@@ -289,7 +304,6 @@ with st.sidebar:
 
     st.radio("Location Type:", ["U.S. Total", "State", "Metropolitan Area"], key='loc_type', horizontal=True)
     
-    # Context-aware filter display
     if st.session_state.loc_type == "State":
         st.selectbox("State:", sorted(STATE_FIPS.keys()), key='selected_location')
         st.session_state.selected_industry = "Total Nonfarm"
@@ -307,7 +321,6 @@ with st.sidebar:
         st.markdown("- **Visual Integrity:** Minimize non-data ink.\n- **Color Choice:** Sequential, colorblind-safe palettes.\n- **Layout:** Z-pattern: top KPIs/map, then details.")
     st.info("Data Source: U.S. Bureau of Labor Statistics (BLS)")
     
-    # Corrected check for last_updated
     if 'last_updated' in st.session_state and st.session_state.last_updated is not None:
         st.caption(f"Data last refreshed: {st.session_state.last_updated.strftime('%Y-%m-%d %H:%M:%S %Z')}")
 
@@ -333,6 +346,9 @@ if 'last_updated' not in st.session_state or st.session_state.last_updated is No
     st.session_state.last_updated = pd.Timestamp.now(tz="UTC")
 
 display_data_df = full_data_df[full_data_df.index <= pd.to_datetime(st.session_state.base_month)]
+
+if not display_data_df.empty:
+    st.markdown(f"<p class='sub-header'>Data as of {display_data_df.index[-1].strftime('%B %Y')}</p>", unsafe_allow_html=True)
 
 # Custom Tabs using st.radio
 tab_options = ["📊 Overview", "🗺️ State Map", "📈 Historical Trends", "📋 Data Export"]
@@ -394,13 +410,19 @@ elif st.session_state.active_tab == "🗺️ State Map":
 
 elif st.session_state.active_tab == "📈 Historical Trends":
     chart_df = display_data_df.last('24M')
-    metrics_for_chart1 = [m for m in ["Job Openings", "Unemployment Rate"] if m in chart_df.columns]
+    metrics_for_chart = [m for m in ["Job Openings", "Unemployment Rate"] if m in chart_df.columns and not chart_df[m].dropna().empty]
     
     chart_title = f"Trends for {loc_title}"
     
-    if len(metrics_for_chart1) > 0:
-        st.plotly_chart(create_time_series_chart(chart_df, chart_title, metrics_for_chart1, st.session_state.selected_industry), use_container_width=True)
-    if 'Quits Rate' in chart_df.columns:
+    if len(metrics_for_chart) == 2:
+        st.plotly_chart(create_time_series_chart(chart_df, chart_title, metrics_for_chart, st.session_state.selected_industry), use_container_width=True)
+    elif len(metrics_for_chart) == 1:
+        metric_name = metrics_for_chart[0]
+        color = '#0D6EFD' if metric_name == "Job Openings" else '#6C757D'
+        st.info(f"Only {metric_name} data is available for this view. This may be due to reporting lags for other metrics. Try selecting an earlier Base Month.")
+        st.plotly_chart(create_single_metric_chart(chart_df, chart_title, metric_name, color), use_container_width=True)
+
+    if 'Quits Rate' in chart_df.columns and not chart_df['Quits Rate'].dropna().empty:
         st.plotly_chart(create_quits_rate_chart(chart_df, loc_title), use_container_width=True)
 
 elif st.session_state.active_tab == "📋 Data Export":
