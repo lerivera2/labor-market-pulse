@@ -139,7 +139,6 @@ class DataMappings:
     STATE_MAPPING: Dict[str, str] = {'Alabama': 'AL', 'Alaska': 'AK', 'Arizona': 'AZ', 'Arkansas': 'AR', 'California': 'CA', 'Colorado': 'CO', 'Connecticut': 'CT', 'Delaware': 'DE', 'District of Columbia': 'DC', 'Florida': 'FL', 'Georgia': 'GA', 'Hawaii': 'HI', 'Idaho': 'ID', 'Illinois': 'IL', 'Indiana': 'IN', 'Iowa': 'IA', 'Kansas': 'KS', 'Kentucky': 'KY', 'Louisiana': 'LA', 'Maine': 'ME', 'Maryland': 'MD', 'Massachusetts': 'MA', 'Michigan': 'MI', 'Minnesota': 'MN', 'Mississippi': 'MS', 'Missouri': 'MO', 'Montana': 'MT', 'Nebraska': 'NE', 'Nevada': 'NV', 'New Hampshire': 'NH', 'New Jersey': 'NJ', 'New Mexico': 'NM', 'New York': 'NY', 'North Carolina': 'NC', 'North Dakota': 'ND', 'Ohio': 'OH', 'Oklahoma': 'OK', 'Oregon': 'OR', 'Pennsylvania': 'PA', 'Rhode Island': 'RI', 'South Carolina': 'SC', 'South Dakota': 'SD', 'Tennessee': 'TN', 'Texas': 'TX', 'Utah': 'UT', 'Vermont': 'VT', 'Virginia': 'VA', 'Washington': 'WA', 'West Virginia': 'WV', 'Wisconsin': 'WI', 'Wyoming': 'WY'}
     STATE_FIPS: Dict[str, str] = {'Alabama': '01', 'Alaska': '02', 'Arizona': '04', 'Arkansas': '05', 'California': '06', 'Colorado': '08', 'Connecticut': '09', 'Delaware': '10', 'District of Columbia': '11', 'Florida': '12', 'Georgia': '13', 'Hawaii': '15', 'Idaho': '16', 'Illinois': '17', 'Indiana': '18', 'Iowa': '19', 'Kansas': '20', 'Kentucky': '21', 'Louisiana': '22', 'Maine': '23', 'Maryland': '24', 'Massachusetts': '25', 'Michigan': '26', 'Minnesota': '27', 'Mississippi': '28', 'Missouri': '29', 'Montana': '30', 'Nebraska': '31', 'Nevada': '32', 'New Hampshire': '33', 'New Jersey': '34', 'New Mexico': '35', 'New York': '36', 'North Carolina': '37', 'North Dakota': '38', 'Ohio': '39', 'Oklahoma': '40', 'Oregon': '41', 'Pennsylvania': '42', 'Rhode Island': '44', 'South Carolina': '45', 'South Dakota': '46', 'Tennessee': '47', 'Texas': '48', 'Utah': '49', 'Vermont': '50', 'Virginia': '51', 'Washington': '52', 'West Virginia': '54', 'Wisconsin': '55', 'Wyoming': '56'}
     INDUSTRY_CODES: Dict[str, Dict[str, str]] = {"Total Nonfarm": {"JOLTS": "000000", "CPS_UR": "LNS14000000"}, "Construction": {"JOLTS": "200000", "CPS_UR": "LNU04032231"}, "Manufacturing": {"JOLTS": "300000", "CPS_UR": "LNU04032232"}, "Trade, Transportation, and Utilities": {"JOLTS": "400000", "CPS_UR": "LNU04032235"}, "Information": {"JOLTS": "510000", "CPS_UR": "LNU04032240"}, "Financial Activities": {"JOLTS": "520000", "CPS_UR": "LNU04032241"}, "Professional and Business Services": {"JOLTS": "600000", "CPS_UR": "LNU04032242"}, "Education and Health Services": {"JOLTS": "620000", "CPS_UR": "LNU04032243"}, "Leisure and Hospitality": {"JOLTS": "700000", "CPS_UR": "LNU04032244"}}
-    MSA_CODES: Dict[str, str] = {"New York-Newark-Jersey City, NY-NJ-PA": "35620", "Los Angeles-Long Beach-Anaheim, CA": "31080", "Chicago-Naperville-Elgin, IL-IN-WI": "16980", "Dallas-Fort Worth-Arlington, TX": "19100", "Houston-The Woodlands-Sugar Land, TX": "26420", "Washington-Arlington-Alexandria, DC-VA-MD-WV": "47900", "Miami-Fort Lauderdale-Pompano Beach, FL": "33100", "Philadelphia-Camden-Wilmington, PA-NJ-DE-MD": "37980", "Atlanta-Sandy Springs-Alpharetta, GA": "12060", "Boston-Cambridge-Newton, MA-NH": "14460"}
 
     @staticmethod
     @lru_cache(maxsize=128)
@@ -156,10 +155,6 @@ class DataMappings:
                 series["Unemployment Rate"] = f"LASST{fips}0000000000003"
                 series["Job Openings"] = f"JTS{fips}000000000JOL"
                 series["Quits Rate"] = f"JTS{fips}000000000QUR"
-        elif loc_type == "Metropolitan Area":
-            msa_code = DataMappings.MSA_CODES.get(location)
-            if msa_code:
-                series["Unemployment Rate"] = f"LASMT{msa_code}0000000000003"
         return series
 
 class LocalCache:
