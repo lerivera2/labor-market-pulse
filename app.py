@@ -1,3 +1,6 @@
+# Labor-Market Pulse: Production-Optimized Professional Edition
+# A comprehensive, production-ready Streamlit application for labor market analysis.
+
 import streamlit as st
 import requests
 import pandas as pd
@@ -338,6 +341,7 @@ class SessionStateManager:
         'selected_location': "U.S. Total",
         'selected_industry': "Total Nonfarm",
         'base_month': None,
+        'active_tab': "📊 Overview",
         'last_updated': None,
         'init': True
     }
@@ -487,7 +491,6 @@ class LaborMarketApp:
         cols = st.columns(len(metrics))
         for i, metric in enumerate(metrics):
             with cols[i]:
-                st.markdown('<div class="metric-card">', unsafe_allow_html=True)
                 latest_val = df[metric].iloc[-1]
                 delta = latest_val - df[metric].iloc[-2]
                 
@@ -496,7 +499,6 @@ class LaborMarketApp:
                 
                 st.metric(label=f"{metric} ({latest_date_str})", value=value_str, delta=f"{delta_str} vs {previous_date_str}", delta_color="inverse" if metric == "Unemployment Rate" else "normal")
                 st.plotly_chart(self.chart_factory.create_sparkline(df, metric), use_container_width=True, config={'displayModeBar': False})
-                st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown("---")
         if "Unemployment Rate" in df.columns:
@@ -509,7 +511,12 @@ class LaborMarketApp:
         elif len(metrics_for_chart) == 1:
             metric = metrics_for_chart[0]
             color = self.config.COLORS['primary'] if metric == "Job Openings" else self.config.COLORS['secondary']
-            st.info(f"Only {metric} data is available for this view.")
+            
+            if self.state.get('loc_type') in ["State", "Metropolitan Area"]:
+                 st.info(f"Only {metric} data is available for this view.")
+            else:
+                 st.info(f"Only {metric} data is available for this view. This may be due to reporting lags for other metrics. Try selecting an earlier Base Month.")
+            
             st.plotly_chart(self.chart_factory.create_single_metric_chart(df, title, metric, color), use_container_width=True)
         
         if 'Quits Rate' in df.columns and not df['Quits Rate'].dropna().empty:
