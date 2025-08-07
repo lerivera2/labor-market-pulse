@@ -12,7 +12,6 @@ import logging
 from dataclasses import dataclass, field
 from functools import wraps, lru_cache
 from typing import List, Dict, Any, Optional, Callable
-from statsmodels.tsa.seasonal import seasonal_decompose
 import contextlib
 
 # --- 1. Configuration Management ---
@@ -333,6 +332,7 @@ class SessionStateManager:
         'selected_location': "U.S. Total",
         'selected_industry': "Total Nonfarm",
         'base_month': None,
+        'active_tab': "📊 Overview",
         'last_updated': None,
         'init': True
     }
