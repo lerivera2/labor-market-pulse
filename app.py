@@ -1,6 +1,3 @@
-# Labor-Market Pulse: Production-Optimized Professional Edition
-# A comprehensive, production-ready Streamlit application for labor market analysis.
-
 import streamlit as st
 import requests
 import pandas as pd
@@ -336,7 +333,6 @@ class SessionStateManager:
         'selected_location': "U.S. Total",
         'selected_industry': "Total Nonfarm",
         'base_month': None,
-        'active_tab': "📊 Overview",
         'last_updated': None,
         'init': True
     }
@@ -504,7 +500,7 @@ class LaborMarketApp:
             metric = metrics_for_chart[0]
             color = self.config.COLORS['primary'] if metric == "Job Openings" else self.config.COLORS['secondary']
             
-            if self.state.get('loc_type') in ["State", "Metropolitan Area"]:
+            if self.state.get('loc_type') in ["State"]:
                  st.info(f"Only {metric} data is available for this view.")
             else:
                  st.info(f"Only {metric} data is available for this view. This may be due to reporting lags for other metrics. Try selecting an earlier Base Month.")
